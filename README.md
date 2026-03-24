@@ -118,7 +118,7 @@ SQL is used to store and manage all project, user, budget, and financial request
 
 ---
 
-## 🔄 Example Workflow
+## Example Workflow
 
 1. A researcher logs in and submits an expense request for a project
 2. The request is saved with a pending status
@@ -128,7 +128,7 @@ SQL is used to store and manage all project, user, budget, and financial request
 
 ---
 
-## 📖 Use Case
+## Use Case
 
 This system is ideal for:
 
@@ -141,13 +141,13 @@ It improves accountability, budget visibility, and overall financial organizatio
 
 ---
 
-## 🧠 Background
+## Background
 
 This project was developed as part of a database systems course. It models real-world research lab financial workflows, including project management, budget tracking, approval systems, and reimbursement handling.
 
 ---
 
-## 👥 Team
+## Team
 
 - Geoffrey Agustin
 - Camden Forbes
