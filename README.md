@@ -154,3 +154,16 @@ This project was developed as part of a database systems course. It models real-
 - Mehak Jammu
 - Nick Mamaoag
 - Christopher Velez
+
+---
+
+## Quick Start for Frontend
+
+```bash
+git clone https://github.com/nick-mama/lab-budget-manager.git
+cd lab-budget-manager/frontend
+npm install
+npm run dev
+```
+
+Open http://localhost:3000
