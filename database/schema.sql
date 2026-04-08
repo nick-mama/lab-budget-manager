@@ -7,7 +7,6 @@ project_name
 start_date
 end_date
 status (active, completed, closed)*/
-
 CREATE TABLE Project(
     project_id INT PRIMARY KEY AUTO_INCREMENT,
     project_name VARCHAR(250) NOT NULL,
@@ -23,7 +22,7 @@ last_name
 email
 role_type (lab manager, researcher, financial admin)*/
 CREATE TABLE User(
-    user_id INT NOT DEFAULT AUTO_INCREMENT,
+    user_id INT PRIMARY KEY AUTO_INCREMENT,
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
     email VARCHAR(200) NOT NULL UNIQUE,
