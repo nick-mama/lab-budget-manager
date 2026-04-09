@@ -19,6 +19,12 @@
   },
   "homepage": "https://github.com/nick-mama/lab-budget-manager#readme",
   "dependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "^9.2.1",
+    "sql.js": "^1.10.3",
+    "cors": "^2.8.5",
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.3"
   }
 }
