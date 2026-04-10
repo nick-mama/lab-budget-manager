@@ -1,122 +1,79 @@
-const initSqlJs = require("sql.js");
-const fs = require("fs");
+const mysql = require("mysql2/promise");
 const path = require("path");
 
-const DB_PATH = path.join(__dirname, "lab_budget.db");
+// Load .env from repo root when running from backend/
+require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 
-let db = null;
+let pool = null;
 
-// converts sql.js column/values result format into an array of plain objects
-function rowsToObjects(results) {
-  if (!results || results.length === 0) return [];
-  const { columns, values } = results[0];
-  return values.map((row) => {
-    const obj = {};
-    columns.forEach((col, i) => { obj[col] = row[i]; });
-    return obj;
-  });
-}
-
-// saves the in-memory database back to disk after every write
-function persist() {
-  const data = db.export();
-  fs.writeFileSync(DB_PATH, Buffer.from(data));
-}
-
-// wraps sql.js to give us a friendlier api similar to better-sqlite3
-// .get()  -> returns first row as object or null
-// .all()  -> returns all rows as array of objects
-// .run()  -> executes a write, saves to disk, returns { lastInsertRowid }
-function prepare(sql) {
-  return {
-    get(...params) {
-      const stmt = db.prepare(sql);
-      stmt.bind(params);
-      const row = stmt.step() ? stmt.getAsObject() : null;
-      stmt.free();
-      return row;
-    },
-    all(...params) {
-      const stmt = db.prepare(sql);
-      stmt.bind(params);
-      const rows = [];
-      while (stmt.step()) {
-        rows.push(stmt.getAsObject());
-      }
-      stmt.free();
-      return rows;
-    },
-    run(...params) {
-      db.run(sql, params);
-      const idResult = db.exec("SELECT last_insert_rowid() as id");
-      const lastInsertRowid = idResult[0]?.values[0][0] ?? null;
-      persist();
-      return { lastInsertRowid };
-    },
-  };
-}
-
-function exec(sql) {
-  const result = db.exec(sql);
-  persist();
-  return result;
-}
-
-async function initDb() {
-  const SQL = await initSqlJs();
-
-  if (fs.existsSync(DB_PATH)) {
-    const buf = fs.readFileSync(DB_PATH);
-    db = new SQL.Database(buf);
-  } else {
-    db = new SQL.Database();
+function getPool() {
+  if (!pool) {
+    throw new Error("database not initialized; call initDb() first");
   }
+  return pool;
+}
 
-  db.exec(`
+/** First row or null */
+async function get(sql, params = []) {
+  const [rows] = await getPool().execute(sql, params);
+  return rows[0] ?? null;
+}
+
+/** All rows */
+async function all(sql, params = []) {
+  const [rows] = await getPool().execute(sql, params);
+  return rows;
+}
+
+/** INSERT/UPDATE/DELETE — returns { lastInsertRowid } for API parity */
+async function run(sql, params = []) {
+  const [result] = await getPool().execute(sql, params);
+  return { lastInsertRowid: result.insertId };
+}
+
+async function ensureSchema() {
+  await getPool().execute(`
     CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      email TEXT NOT NULL UNIQUE,
-      role TEXT NOT NULL,
-      avatar TEXT NOT NULL,
-      created_at TEXT DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS projects (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      project_code TEXT NOT NULL UNIQUE,
-      name TEXT NOT NULL,
-      manager_id INTEGER NOT NULL,
-      start_date TEXT NOT NULL,
-      end_date TEXT NOT NULL,
-      budget REAL NOT NULL DEFAULT 0,
-      status TEXT NOT NULL,
-      created_at TEXT DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS line_items (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      item_code TEXT NOT NULL UNIQUE,
-      description TEXT NOT NULL,
-      project_id INTEGER NOT NULL,
-      requestor_id INTEGER NOT NULL,
-      type TEXT NOT NULL,
-      amount REAL NOT NULL,
-      request_date TEXT NOT NULL,
-      status TEXT NOT NULL,
-      created_at TEXT DEFAULT (datetime('now'))
-    );
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      email VARCHAR(255) NOT NULL UNIQUE,
+      role VARCHAR(100) NOT NULL,
+      avatar VARCHAR(32) NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
   `);
 
-  persist();
+  await getPool().execute(`
+    CREATE TABLE IF NOT EXISTS projects (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      project_code VARCHAR(50) NOT NULL UNIQUE,
+      name VARCHAR(255) NOT NULL,
+      manager_id INT NOT NULL,
+      start_date DATE NOT NULL,
+      end_date DATE NOT NULL,
+      budget DECIMAL(15, 2) NOT NULL DEFAULT 0,
+      status VARCHAR(50) NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 
-  const userCount = prepare("SELECT COUNT(*) as count FROM users").get();
-  if (!userCount || userCount.count === 0) {
-    seedData();
-  }
+  await getPool().execute(`
+    CREATE TABLE IF NOT EXISTS line_items (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      item_code VARCHAR(50) NOT NULL UNIQUE,
+      description TEXT NOT NULL,
+      project_id INT NOT NULL,
+      requestor_id INT NOT NULL,
+      type VARCHAR(50) NOT NULL,
+      amount DECIMAL(15, 2) NOT NULL,
+      request_date DATE NOT NULL,
+      status VARCHAR(50) NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 }
 
-function seedData() {
+async function seedData() {
   const users = [
     ["Geoffrey Agustin", "geoffrey.agustin@university.edu", "Lab Manager", "GA"],
     ["Camden Forbes", "camden.forbes@university.edu", "Researcher", "CF"],
@@ -126,7 +83,7 @@ function seedData() {
   ];
 
   for (const u of users) {
-    prepare("INSERT INTO users (name, email, role, avatar) VALUES (?, ?, ?, ?)").run(...u);
+    await run("INSERT INTO users (name, email, role, avatar) VALUES (?, ?, ?, ?)", u);
   }
 
   const projects = [
@@ -139,9 +96,10 @@ function seedData() {
   ];
 
   for (const p of projects) {
-    prepare(
-      "INSERT INTO projects (project_code, name, manager_id, start_date, end_date, budget, status) VALUES (?, ?, ?, ?, ?, ?, ?)"
-    ).run(...p);
+    await run(
+      "INSERT INTO projects (project_code, name, manager_id, start_date, end_date, budget, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      p
+    );
   }
 
   const items = [
@@ -158,10 +116,44 @@ function seedData() {
   ];
 
   for (const li of items) {
-    prepare(
-      "INSERT INTO line_items (item_code, description, project_id, requestor_id, type, amount, request_date, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
-    ).run(...li);
+    await run(
+      "INSERT INTO line_items (item_code, description, project_id, requestor_id, type, amount, request_date, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      li
+    );
   }
 }
 
-module.exports = { initDb, prepare, exec };
+async function initDb() {
+  const host = process.env.MYSQL_HOST || "127.0.0.1";
+  const port = Number(process.env.MYSQL_PORT || 3306);
+  const user = process.env.MYSQL_USER;
+  const password = process.env.MYSQL_PASSWORD ?? "";
+  const database = process.env.MYSQL_DATABASE;
+
+  if (!user || !database) {
+    throw new Error(
+      "Set MYSQL_USER and MYSQL_DATABASE (and optionally MYSQL_HOST, MYSQL_PORT, MYSQL_PASSWORD) in a root .env file or the environment."
+    );
+  }
+
+  pool = mysql.createPool({
+    host,
+    port,
+    user,
+    password,
+    database,
+    waitForConnections: true,
+    connectionLimit: 10,
+    decimalNumbers: true,
+  });
+
+  await ensureSchema();
+
+  const userCountRow = await get("SELECT COUNT(*) AS count FROM users");
+  const count = Number(userCountRow?.count ?? 0);
+  if (count === 0) {
+    await seedData();
+  }
+}
+
+module.exports = { initDb, get, all, run };

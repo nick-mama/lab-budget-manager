@@ -8,7 +8,11 @@ __v0_jsx-dev-runtime.ts
 next.user-config.*
 
 # Environment variables
+.env
 .env*.local
+
+# Legacy local SQLite file (backend now uses MySQL)
+backend/lab_budget.db
 
 # Common ignores
 node_modules

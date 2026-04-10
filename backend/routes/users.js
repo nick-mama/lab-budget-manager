@@ -1,14 +1,14 @@
 const express = require("express");
 const router = express.Router();
-const { prepare } = require("../db");
+const { get, all, run } = require("../db");
 
 // get all users, optional ?role= filter
-router.get("/", (req, res) => {
+router.get("/", async (req, res) => {
   try {
     const { role } = req.query;
 
     let query = `
-      SELECT u.*, GROUP_CONCAT(p.name, '||') as project_names
+      SELECT u.*, GROUP_CONCAT(p.name SEPARATOR '||') as project_names
       FROM users u
       LEFT JOIN projects p ON p.manager_id = u.id
     `;
@@ -19,9 +19,9 @@ router.get("/", (req, res) => {
       params.push(role);
     }
 
-    query += " GROUP BY u.id ORDER BY u.name ASC";
+    query += " GROUP BY u.id, u.name, u.email, u.role, u.avatar, u.created_at ORDER BY u.name ASC";
 
-    const users = prepare(query).all(...params);
+    const users = await all(query, params);
 
     const result = users.map((user) => ({
       ...user,
@@ -36,9 +36,9 @@ router.get("/", (req, res) => {
 });
 
 // get a single user
-router.get("/:id", (req, res) => {
+router.get("/:id", async (req, res) => {
   try {
-    const user = prepare("SELECT * FROM users WHERE id = ?").get(req.params.id);
+    const user = await get("SELECT * FROM users WHERE id = ?", [req.params.id]);
     if (!user) return res.status(404).json({ error: "user not found" });
     res.json(user);
   } catch (err) {
@@ -47,28 +47,28 @@ router.get("/:id", (req, res) => {
 });
 
 // create a user
-router.post("/", (req, res) => {
+router.post("/", async (req, res) => {
   try {
     const { name, email, role } = req.body;
     if (!name || !email || !role) {
       return res.status(400).json({ error: "name, email, and role are required" });
     }
 
-    // generate avatar initials from name
     const parts = name.trim().split(" ");
     const avatar =
       parts.length >= 2
         ? parts[0][0].toUpperCase() + parts[parts.length - 1][0].toUpperCase()
         : parts[0].substring(0, 2).toUpperCase();
 
-    const result = prepare(
-      "INSERT INTO users (name, email, role, avatar) VALUES (?, ?, ?, ?)"
-    ).run(name, email, role, avatar);
+    const result = await run(
+      "INSERT INTO users (name, email, role, avatar) VALUES (?, ?, ?, ?)",
+      [name, email, role, avatar]
+    );
 
-    const user = prepare("SELECT * FROM users WHERE id = ?").get(result.lastInsertRowid);
+    const user = await get("SELECT * FROM users WHERE id = ?", [result.lastInsertRowid]);
     res.status(201).json(user);
   } catch (err) {
-    if (err.message && err.message.includes("UNIQUE")) {
+    if (err.code === "ER_DUP_ENTRY") {
       return res.status(409).json({ error: "email already in use" });
     }
     res.status(500).json({ error: err.message });
@@ -76,21 +76,21 @@ router.post("/", (req, res) => {
 });
 
 // update a user
-router.put("/:id", (req, res) => {
+router.put("/:id", async (req, res) => {
   try {
-    const user = prepare("SELECT * FROM users WHERE id = ?").get(req.params.id);
+    const user = await get("SELECT * FROM users WHERE id = ?", [req.params.id]);
     if (!user) return res.status(404).json({ error: "user not found" });
 
     const { name, email, role } = req.body;
 
-    prepare("UPDATE users SET name = ?, email = ?, role = ? WHERE id = ?").run(
+    await run("UPDATE users SET name = ?, email = ?, role = ? WHERE id = ?", [
       name ?? user.name,
       email ?? user.email,
       role ?? user.role,
-      req.params.id
-    );
+      req.params.id,
+    ]);
 
-    const updated = prepare("SELECT * FROM users WHERE id = ?").get(req.params.id);
+    const updated = await get("SELECT * FROM users WHERE id = ?", [req.params.id]);
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -98,12 +98,12 @@ router.put("/:id", (req, res) => {
 });
 
 // delete a user
-router.delete("/:id", (req, res) => {
+router.delete("/:id", async (req, res) => {
   try {
-    const user = prepare("SELECT * FROM users WHERE id = ?").get(req.params.id);
+    const user = await get("SELECT * FROM users WHERE id = ?", [req.params.id]);
     if (!user) return res.status(404).json({ error: "user not found" });
 
-    prepare("DELETE FROM users WHERE id = ?").run(req.params.id);
+    await run("DELETE FROM users WHERE id = ?", [req.params.id]);
     res.json({ message: "user deleted" });
   } catch (err) {
     res.status(500).json({ error: err.message });

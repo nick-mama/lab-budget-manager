@@ -1,9 +1,9 @@
 const express = require("express");
 const router = express.Router();
-const { prepare } = require("../db");
+const { get, all, run } = require("../db");
 
 // get all projects with manager name and spending totals, optional ?status= filter
-router.get("/", (req, res) => {
+router.get("/", async (req, res) => {
   try {
     const { status } = req.query;
 
@@ -11,11 +11,21 @@ router.get("/", (req, res) => {
       SELECT
         p.*,
         u.name as manager_name,
-        COALESCE(SUM(CASE WHEN li.type = 'expense' AND li.status != 'rejected' THEN li.amount ELSE 0 END), 0) as spent,
-        COUNT(li.id) as line_item_count
+        COALESCE(s.spent, 0) as spent,
+        COALESCE(c.line_item_count, 0) as line_item_count
       FROM projects p
       JOIN users u ON p.manager_id = u.id
-      LEFT JOIN line_items li ON li.project_id = p.id
+      LEFT JOIN (
+        SELECT project_id,
+          SUM(CASE WHEN type = 'expense' AND status != 'rejected' THEN amount ELSE 0 END) as spent
+        FROM line_items
+        GROUP BY project_id
+      ) s ON s.project_id = p.id
+      LEFT JOIN (
+        SELECT project_id, COUNT(*) as line_item_count
+        FROM line_items
+        GROUP BY project_id
+      ) c ON c.project_id = p.id
     `;
     const params = [];
 
@@ -24,9 +34,9 @@ router.get("/", (req, res) => {
       params.push(status);
     }
 
-    query += " GROUP BY p.id ORDER BY p.created_at DESC";
+    query += " ORDER BY p.created_at DESC";
 
-    const projects = prepare(query).all(...params);
+    const projects = await all(query, params);
     res.json(projects);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -34,29 +44,39 @@ router.get("/", (req, res) => {
 });
 
 // get a single project with its line items
-router.get("/:id", (req, res) => {
+router.get("/:id", async (req, res) => {
   try {
-    const project = prepare(`
+    const project = await get(
+      `
       SELECT
         p.*,
         u.name as manager_name,
-        COALESCE(SUM(CASE WHEN li.type = 'expense' AND li.status != 'rejected' THEN li.amount ELSE 0 END), 0) as spent
+        COALESCE(s.spent, 0) as spent
       FROM projects p
       JOIN users u ON p.manager_id = u.id
-      LEFT JOIN line_items li ON li.project_id = p.id
+      LEFT JOIN (
+        SELECT project_id,
+          SUM(CASE WHEN type = 'expense' AND status != 'rejected' THEN amount ELSE 0 END) as spent
+        FROM line_items
+        GROUP BY project_id
+      ) s ON s.project_id = p.id
       WHERE p.id = ?
-      GROUP BY p.id
-    `).get(req.params.id);
+    `,
+      [req.params.id]
+    );
 
     if (!project) return res.status(404).json({ error: "project not found" });
 
-    const lineItems = prepare(`
+    const lineItems = await all(
+      `
       SELECT li.*, u.name as requestor_name
       FROM line_items li
       JOIN users u ON li.requestor_id = u.id
       WHERE li.project_id = ?
       ORDER BY li.request_date DESC
-    `).all(req.params.id);
+    `,
+      [req.params.id]
+    );
 
     res.json({ ...project, line_items: lineItems });
   } catch (err) {
@@ -65,7 +85,7 @@ router.get("/:id", (req, res) => {
 });
 
 // create a project
-router.post("/", (req, res) => {
+router.post("/", async (req, res) => {
   try {
     const { name, manager_id, start_date, end_date, budget, status } = req.body;
     if (!name || !manager_id || !start_date || !end_date || budget === undefined) {
@@ -74,19 +94,19 @@ router.post("/", (req, res) => {
       });
     }
 
-    // generate the next sequential project code
-    const last = prepare("SELECT project_code FROM projects ORDER BY id DESC LIMIT 1").get();
+    const last = await get("SELECT project_code FROM projects ORDER BY id DESC LIMIT 1");
     let nextNum = 1;
     if (last) {
-      nextNum = parseInt(last.project_code.replace("PRJ-", ""), 10) + 1;
+      nextNum = parseInt(String(last.project_code).replace("PRJ-", ""), 10) + 1;
     }
     const project_code = `PRJ-${String(nextNum).padStart(3, "0")}`;
 
-    const result = prepare(
-      "INSERT INTO projects (project_code, name, manager_id, start_date, end_date, budget, status) VALUES (?, ?, ?, ?, ?, ?, ?)"
-    ).run(project_code, name, manager_id, start_date, end_date, budget, status ?? "active");
+    const result = await run(
+      "INSERT INTO projects (project_code, name, manager_id, start_date, end_date, budget, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [project_code, name, manager_id, start_date, end_date, budget, status ?? "active"]
+    );
 
-    const project = prepare("SELECT * FROM projects WHERE id = ?").get(result.lastInsertRowid);
+    const project = await get("SELECT * FROM projects WHERE id = ?", [result.lastInsertRowid]);
     res.status(201).json(project);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -94,28 +114,31 @@ router.post("/", (req, res) => {
 });
 
 // update a project
-router.put("/:id", (req, res) => {
+router.put("/:id", async (req, res) => {
   try {
-    const project = prepare("SELECT * FROM projects WHERE id = ?").get(req.params.id);
+    const project = await get("SELECT * FROM projects WHERE id = ?", [req.params.id]);
     if (!project) return res.status(404).json({ error: "project not found" });
 
     const { name, manager_id, start_date, end_date, budget, status } = req.body;
 
-    prepare(`
+    await run(
+      `
       UPDATE projects
       SET name = ?, manager_id = ?, start_date = ?, end_date = ?, budget = ?, status = ?
       WHERE id = ?
-    `).run(
-      name ?? project.name,
-      manager_id ?? project.manager_id,
-      start_date ?? project.start_date,
-      end_date ?? project.end_date,
-      budget ?? project.budget,
-      status ?? project.status,
-      req.params.id
+    `,
+      [
+        name ?? project.name,
+        manager_id ?? project.manager_id,
+        start_date ?? project.start_date,
+        end_date ?? project.end_date,
+        budget ?? project.budget,
+        status ?? project.status,
+        req.params.id,
+      ]
     );
 
-    const updated = prepare("SELECT * FROM projects WHERE id = ?").get(req.params.id);
+    const updated = await get("SELECT * FROM projects WHERE id = ?", [req.params.id]);
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -123,13 +146,13 @@ router.put("/:id", (req, res) => {
 });
 
 // delete a project and all its line items
-router.delete("/:id", (req, res) => {
+router.delete("/:id", async (req, res) => {
   try {
-    const project = prepare("SELECT * FROM projects WHERE id = ?").get(req.params.id);
+    const project = await get("SELECT * FROM projects WHERE id = ?", [req.params.id]);
     if (!project) return res.status(404).json({ error: "project not found" });
 
-    prepare("DELETE FROM line_items WHERE project_id = ?").run(req.params.id);
-    prepare("DELETE FROM projects WHERE id = ?").run(req.params.id);
+    await run("DELETE FROM line_items WHERE project_id = ?", [req.params.id]);
+    await run("DELETE FROM projects WHERE id = ?", [req.params.id]);
 
     res.json({ message: "project deleted" });
   } catch (err) {

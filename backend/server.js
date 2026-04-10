@@ -22,7 +22,6 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
-// sql.js requires async wasm loading, so we wait for it before accepting requests
 initDb().then(() => {
   app.listen(PORT, () => {
     console.log(`server running on http://localhost:${PORT}`);
