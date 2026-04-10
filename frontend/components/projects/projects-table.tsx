@@ -13,42 +13,42 @@ import { StatusBadge } from "@/components/dashboard/status-badge";
 import { Button } from "@/components/ui/button";
 import { MoreHorizontal, Eye } from "lucide-react";
 import Link from "next/link";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { ApiProject } from "@/components/projects/projects-view";
 
-// Sample project data
-const projects = [
-  {
-    id: "PRJ-001",
-    name: "Biotech Lab Development",
-    manager: "Nick Mamaoag",
-    startDate: "2024-03-01",
-    endDate: "2025-06-30",
-    budget: "$200,000",
-    spent: "$145,000",
-    status: "active" as const,
-  },
-  {
-    id: "PRJ-002",
-    name: "Quantum Computing Lab",
-    manager: "Camden Forbes",
-    startDate: "2023-09-01",
-    endDate: "2024-09-01",
-    budget: "$180,000",
-    spent: "$156,000",
-    status: "completed" as const,
-  },
-  {
-    id: "PRJ-003",
-    name: "Neural Networks Study",
-    manager: "Geoffrey Agustin",
-    startDate: "2023-06-01",
-    endDate: "2024-06-01",
-    budget: "$85,000",
-    spent: "$85,000",
-    status: "closed" as const,
-  },
-];
+function formatUsd(n: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(n);
+}
 
-export function ProjectsTable() {
+type ProjectStatus = "active" | "completed" | "closed";
+
+function normalizeStatus(s: string): ProjectStatus {
+  if (s === "completed" || s === "closed") return s;
+  return "active";
+}
+
+interface ProjectsTableProps {
+  projects: ApiProject[];
+  loading?: boolean;
+}
+
+export function ProjectsTable({ projects, loading }: ProjectsTableProps) {
+  if (loading) {
+    return (
+      <Card className="bg-card">
+        <CardContent className="space-y-3 p-6">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="bg-card">
       <CardContent className="p-0">
@@ -75,46 +75,54 @@ export function ProjectsTable() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {projects.map((project) => (
-              <TableRow key={project.id} className="border-border">
-                <TableCell className="font-medium text-accent">
-                  {project.id}
-                </TableCell>
-                <TableCell className="font-medium text-foreground">
-                  {project.name}
-                </TableCell>
-                <TableCell className="text-foreground">
-                  {project.manager}
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {project.startDate}
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {project.endDate}
-                </TableCell>
-                <TableCell className="font-medium text-foreground">
-                  {project.budget}
-                </TableCell>
-                <TableCell className="text-foreground">
-                  {project.spent}
-                </TableCell>
-                <TableCell>
-                  <StatusBadge status={project.status} />
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    <Link href={`/projects/${project.id}`}>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <Eye className="h-4 w-4 text-muted-foreground" />
-                      </Button>
-                    </Link>
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                      <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
-                    </Button>
-                  </div>
+            {projects.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={9} className="text-muted-foreground h-24 text-center">
+                  No projects yet. Create one with New Project.
                 </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              projects.map((project) => (
+                <TableRow key={project.id} className="border-border">
+                  <TableCell className="text-accent font-medium">
+                    {project.project_code}
+                  </TableCell>
+                  <TableCell className="text-foreground font-medium">
+                    {project.name}
+                  </TableCell>
+                  <TableCell className="text-foreground">
+                    {project.manager_name}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {project.start_date}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {project.end_date}
+                  </TableCell>
+                  <TableCell className="text-foreground font-medium">
+                    {formatUsd(Number(project.budget))}
+                  </TableCell>
+                  <TableCell className="text-foreground">
+                    {formatUsd(Number(project.spent))}
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge status={normalizeStatus(project.status)} />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <Link href={`/projects/${project.id}`}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Eye className="text-muted-foreground h-4 w-4" />
+                        </Button>
+                      </Link>
+                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <MoreHorizontal className="text-muted-foreground h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </CardContent>

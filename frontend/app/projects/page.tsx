@@ -1,6 +1,5 @@
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout"
-import { ProjectsTable } from "@/components/projects/projects-table"
-import { ProjectsHeader } from "@/components/projects/projects-header"
+import { ProjectsView } from "@/components/projects/projects-view"
 
 export default function ProjectsPage() {
   return (
@@ -8,10 +7,7 @@ export default function ProjectsPage() {
       title="Projects"
       subtitle="Manage your lab projects and track their progress."
     >
-      <ProjectsHeader />
-      <div className="mt-6">
-        <ProjectsTable />
-      </div>
+      <ProjectsView />
     </DashboardLayout>
   )
 }
