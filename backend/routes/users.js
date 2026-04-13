@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { get, all, run } = require("../db");
+const { requireRole } = require("../middleware/auth");
 
 // get all users, optional ?role= filter
 router.get("/", async (req, res) => {
@@ -47,7 +48,7 @@ router.get("/:id", async (req, res) => {
 });
 
 // create a user
-router.post("/", async (req, res) => {
+router.post("/", requireRole("Financial Admin"), async (req, res) => {
   try {
     const { name, email, role } = req.body;
     if (!name || !email || !role) {
@@ -76,7 +77,7 @@ router.post("/", async (req, res) => {
 });
 
 // update a user
-router.put("/:id", async (req, res) => {
+router.put("/:id", requireRole("Financial Admin"), async (req, res) => {
   try {
     const user = await get("SELECT * FROM users WHERE id = ?", [req.params.id]);
     if (!user) return res.status(404).json({ error: "user not found" });
@@ -98,7 +99,7 @@ router.put("/:id", async (req, res) => {
 });
 
 // delete a user
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", requireRole("Financial Admin"), async (req, res) => {
   try {
     const user = await get("SELECT * FROM users WHERE id = ?", [req.params.id]);
     if (!user) return res.status(404).json({ error: "user not found" });

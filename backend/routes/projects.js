@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { get, all, run } = require("../db");
+const { requireRole } = require("../middleware/auth");
 
 // get all projects with manager name and spending totals, optional ?status= filter
 router.get("/", async (req, res) => {
@@ -85,13 +86,18 @@ router.get("/:id", async (req, res) => {
 });
 
 // create a project
-router.post("/", async (req, res) => {
+router.post("/", requireRole(["Lab Manager", "Financial Admin"]), async (req, res) => {
   try {
     const { name, manager_id, start_date, end_date, budget, status } = req.body;
     if (!name || !manager_id || !start_date || !end_date || budget === undefined) {
       return res.status(400).json({
         error: "name, manager_id, start_date, end_date, and budget are required",
       });
+    }
+
+    // Lab managers can only create projects they manage
+    if (req.user.role === "Lab Manager" && Number(manager_id) !== Number(req.user.id)) {
+      return res.status(403).json({ error: "lab managers can only create projects for themselves" });
     }
 
     const last = await get("SELECT project_code FROM projects ORDER BY id DESC LIMIT 1");
@@ -107,6 +113,11 @@ router.post("/", async (req, res) => {
     );
 
     const project = await get("SELECT * FROM projects WHERE id = ?", [result.lastInsertRowid]);
+    // ensure membership for manager
+    await run("INSERT IGNORE INTO project_users (project_id, user_id) VALUES (?, ?)", [
+      result.lastInsertRowid,
+      manager_id,
+    ]);
     res.status(201).json(project);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -114,12 +125,21 @@ router.post("/", async (req, res) => {
 });
 
 // update a project
-router.put("/:id", async (req, res) => {
+router.put("/:id", requireRole(["Lab Manager", "Financial Admin"]), async (req, res) => {
   try {
     const project = await get("SELECT * FROM projects WHERE id = ?", [req.params.id]);
     if (!project) return res.status(404).json({ error: "project not found" });
 
+    // Lab managers can only update projects they manage
+    if (req.user.role === "Lab Manager" && Number(project.manager_id) !== Number(req.user.id)) {
+      return res.status(403).json({ error: "forbidden" });
+    }
+
     const { name, manager_id, start_date, end_date, budget, status } = req.body;
+
+    if (req.user.role === "Lab Manager" && manager_id && Number(manager_id) !== Number(req.user.id)) {
+      return res.status(403).json({ error: "lab managers cannot reassign project manager" });
+    }
 
     await run(
       `
@@ -139,6 +159,10 @@ router.put("/:id", async (req, res) => {
     );
 
     const updated = await get("SELECT * FROM projects WHERE id = ?", [req.params.id]);
+    await run("INSERT IGNORE INTO project_users (project_id, user_id) VALUES (?, ?)", [
+      req.params.id,
+      updated.manager_id,
+    ]);
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -146,10 +170,14 @@ router.put("/:id", async (req, res) => {
 });
 
 // delete a project and all its line items
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", requireRole(["Lab Manager", "Financial Admin"]), async (req, res) => {
   try {
     const project = await get("SELECT * FROM projects WHERE id = ?", [req.params.id]);
     if (!project) return res.status(404).json({ error: "project not found" });
+
+    if (req.user.role === "Lab Manager" && Number(project.manager_id) !== Number(req.user.id)) {
+      return res.status(403).json({ error: "forbidden" });
+    }
 
     await run("DELETE FROM line_items WHERE project_id = ?", [req.params.id]);
     await run("DELETE FROM projects WHERE id = ?", [req.params.id]);
