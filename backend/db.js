@@ -31,6 +31,32 @@ async function run(sql, params = []) {
   return { lastInsertRowid: result.insertId };
 }
 
+async function tableExists(tableName) {
+  const row = await get(
+    `
+    SELECT COUNT(*) AS count
+    FROM information_schema.tables
+    WHERE table_schema = DATABASE() AND table_name = ?
+  `,
+    [tableName]
+  );
+  return Number(row?.count ?? 0) > 0;
+}
+
+async function columnExists(tableName, columnName) {
+  const row = await get(
+    `
+    SELECT COUNT(*) AS count
+    FROM information_schema.columns
+    WHERE table_schema = DATABASE()
+      AND table_name = ?
+      AND column_name = ?
+  `,
+    [tableName, columnName]
+  );
+  return Number(row?.count ?? 0) > 0;
+}
+
 async function ensureSchema() {
   await getPool().execute(`
     CREATE TABLE IF NOT EXISTS users (
@@ -70,6 +96,85 @@ async function ensureSchema() {
       status VARCHAR(50) NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
+  `);
+
+  // --- Design-doc aligned tables ---
+  await getPool().execute(`
+    CREATE TABLE IF NOT EXISTS budgets (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      project_id INT NOT NULL UNIQUE,
+      total_allocated_amount DECIMAL(15, 2) NOT NULL DEFAULT 0,
+      remaining_balance DECIMAL(15, 2) NOT NULL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await getPool().execute(`
+    CREATE TABLE IF NOT EXISTS project_users (
+      project_id INT NOT NULL,
+      user_id INT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (project_id, user_id)
+    )
+  `);
+
+  // --- Add missing line item fields from design doc (safe ALTERs) ---
+  if (!(await columnExists("line_items", "approver_id"))) {
+    await getPool().execute("ALTER TABLE line_items ADD COLUMN approver_id INT NULL");
+  }
+  if (!(await columnExists("line_items", "decision_date"))) {
+    await getPool().execute("ALTER TABLE line_items ADD COLUMN decision_date DATE NULL");
+  }
+  if (!(await columnExists("line_items", "payment_date"))) {
+    await getPool().execute("ALTER TABLE line_items ADD COLUMN payment_date DATE NULL");
+  }
+  if (!(await columnExists("line_items", "rejection_reason"))) {
+    await getPool().execute("ALTER TABLE line_items ADD COLUMN rejection_reason TEXT NULL");
+  }
+  if (!(await columnExists("line_items", "budget_id"))) {
+    await getPool().execute("ALTER TABLE line_items ADD COLUMN budget_id INT NULL");
+  }
+
+  // --- Backfill: create one budget per project and link existing line_items to it ---
+  const hasBudgets = await tableExists("budgets");
+  if (hasBudgets) {
+    await getPool().execute(`
+      INSERT INTO budgets (project_id, total_allocated_amount, remaining_balance)
+      SELECT
+        p.id as project_id,
+        COALESCE(p.budget, 0) as total_allocated_amount,
+        COALESCE(p.budget, 0) -
+          COALESCE((
+            SELECT SUM(li.amount)
+            FROM line_items li
+            WHERE li.project_id = p.id
+              AND li.type = 'expense'
+              AND li.status != 'rejected'
+          ), 0) as remaining_balance
+      FROM projects p
+      LEFT JOIN budgets b ON b.project_id = p.id
+      WHERE b.project_id IS NULL
+    `);
+
+    // Link existing line_items to their project's budget if budget_id is null
+    await getPool().execute(`
+      UPDATE line_items li
+      JOIN budgets b ON b.project_id = li.project_id
+      SET li.budget_id = b.id
+      WHERE li.budget_id IS NULL
+    `);
+  }
+
+  // --- Backfill: project_users membership for managers and requestors ---
+  await getPool().execute(`
+    INSERT IGNORE INTO project_users (project_id, user_id)
+    SELECT id as project_id, manager_id as user_id
+    FROM projects
+  `);
+  await getPool().execute(`
+    INSERT IGNORE INTO project_users (project_id, user_id)
+    SELECT DISTINCT project_id, requestor_id
+    FROM line_items
   `);
 }
 
