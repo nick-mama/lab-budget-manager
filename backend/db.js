@@ -73,7 +73,8 @@ async function ensureSchema() {
     CREATE TABLE IF NOT EXISTS projects (
       id INT AUTO_INCREMENT PRIMARY KEY,
       project_code VARCHAR(50) NOT NULL UNIQUE,
-      name VARCHAR(255) NOT NULL,
+      name VARCHAR(255) NOT 
+      NULL,
       manager_id INT NOT NULL,
       start_date DATE NOT NULL,
       end_date DATE NOT NULL,

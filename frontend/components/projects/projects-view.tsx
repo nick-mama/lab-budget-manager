@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ProjectsHeader } from "@/components/projects/projects-header";
 import { ProjectsTable } from "@/components/projects/projects-table";
-import { getApiBase } from "@/lib/api";
+import { useApi } from "@/lib/api-client";
 
 export type ApiProject = {
   id: number;
@@ -24,12 +24,13 @@ export function ProjectsView() {
   const [projects, setProjects] = useState<ApiProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { apiFetch } = useApi();
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${getApiBase()}/api/projects`);
+      const res = await apiFetch("/api/projects");
       if (!res.ok) {
         const text = await res.text();
         throw new Error(text || res.statusText);
@@ -42,7 +43,7 @@ export function ProjectsView() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [apiFetch]);
 
   useEffect(() => {
     load();

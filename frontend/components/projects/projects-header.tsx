@@ -21,7 +21,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Plus, Search, Filter } from "lucide-react";
-import { getApiBase } from "@/lib/api";
+import { useApi } from "@/lib/api-client";
 
 type ApiUser = {
   id: number;
@@ -35,6 +35,7 @@ interface ProjectsHeaderProps {
 }
 
 export function ProjectsHeader({ onProjectCreated }: ProjectsHeaderProps) {
+  const { apiFetch, userId } = useApi();
   const [open, setOpen] = useState(false);
   const [managers, setManagers] = useState<ApiUser[]>([]);
   const [name, setName] = useState("");
@@ -51,7 +52,7 @@ export function ProjectsHeader({ onProjectCreated }: ProjectsHeaderProps) {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${getApiBase()}/api/users`);
+        const res = await apiFetch("/api/users");
         if (!res.ok) throw new Error("Could not load users");
         const users = (await res.json()) as ApiUser[];
         if (cancelled) return;
@@ -78,6 +79,10 @@ export function ProjectsHeader({ onProjectCreated }: ProjectsHeaderProps) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setFormError(null);
+    if (!userId) {
+      setFormError("Choose an active user in the top bar first.");
+      return;
+    }
     if (!name.trim() || !managerId || !startDate || !endDate || budget === "") {
       setFormError("Fill in all required fields.");
       return;
@@ -89,7 +94,7 @@ export function ProjectsHeader({ onProjectCreated }: ProjectsHeaderProps) {
     }
     setSubmitting(true);
     try {
-      const res = await fetch(`${getApiBase()}/api/projects`, {
+      const res = await apiFetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
