@@ -56,6 +56,17 @@ router.get("/", async (req, res) => {
     `;
     const params = [];
 
+    // Role-scoped reads (backwards-compatible: if no x-user-id, return all)
+    if (req.user?.role === "Researcher") {
+      query += " AND li.requestor_id = ?";
+      params.push(req.user.id);
+    } else if (req.user?.role === "Lab Manager") {
+      query += " AND p.manager_id = ?";
+      params.push(req.user.id);
+    } else if (req.user?.role === "Financial Admin") {
+      // allow all
+    }
+
     if (status && status !== "all-status") {
       query += " AND li.status = ?";
       params.push(status);
@@ -93,6 +104,17 @@ router.get("/:id", async (req, res) => {
     );
 
     if (!item) return res.status(404).json({ error: "line item not found" });
+
+    // Role-scoped reads (backwards-compatible: if no x-user-id, allow)
+    if (req.user?.role === "Researcher") {
+      if (Number(item.requestor_id) !== Number(req.user.id)) {
+        return res.status(403).json({ error: "forbidden" });
+      }
+    } else if (req.user?.role === "Lab Manager") {
+      const ok = await isProjectManager(Number(item.project_id), req.user.id);
+      if (!ok) return res.status(403).json({ error: "forbidden" });
+    }
+
     res.json(item);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -272,12 +294,25 @@ router.put("/:id", requireUser, async (req, res) => {
 });
 
 // delete a line item
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", requireUser, async (req, res) => {
   try {
     const item = await get("SELECT * FROM line_items WHERE id = ?", [req.params.id]);
     if (!item) return res.status(404).json({ error: "line item not found" });
 
+    if (req.user.role === "Financial Admin") {
+      await run("DELETE FROM line_items WHERE id = ?", [req.params.id]);
+      await recalcBudgetForProject(Number(item.project_id));
+      return res.json({ message: "line item deleted" });
+    }
+    if (Number(item.requestor_id) !== Number(req.user.id)) {
+      return res.status(403).json({ error: "forbidden" });
+    }
+    if (item.status !== "pending") {
+      return res.status(409).json({ error: "can only delete pending line items" });
+    }
+
     await run("DELETE FROM line_items WHERE id = ?", [req.params.id]);
+    await recalcBudgetForProject(Number(item.project_id));
     res.json({ message: "line item deleted" });
   } catch (err) {
     res.status(500).json({ error: err.message });

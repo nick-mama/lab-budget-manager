@@ -30,9 +30,28 @@ router.get("/", async (req, res) => {
     `;
     const params = [];
 
-    if (status && status !== "all") {
-      query += " WHERE p.status = ?";
-      params.push(status);
+    // Role-scoped reads (backwards-compatible: if no x-user-id, return all)
+    if (req.user?.role === "Lab Manager") {
+      query += " WHERE p.manager_id = ?";
+      params.push(req.user.id);
+      if (status && status !== "all") {
+        query += " AND p.status = ?";
+        params.push(status);
+      }
+    } else if (req.user?.role === "Researcher") {
+      query +=
+        " JOIN project_users pu ON pu.project_id = p.id WHERE pu.user_id = ?";
+      params.push(req.user.id);
+      if (status && status !== "all") {
+        query += " AND p.status = ?";
+        params.push(status);
+      }
+    } else {
+      // Financial Admin (or unauthenticated) -> can view all
+      if (status && status !== "all") {
+        query += " WHERE p.status = ?";
+        params.push(status);
+      }
     }
 
     query += " ORDER BY p.created_at DESC";
@@ -47,6 +66,21 @@ router.get("/", async (req, res) => {
 // get a single project with its line items
 router.get("/:id", async (req, res) => {
   try {
+    // Role-scoped reads (backwards-compatible: if no x-user-id, allow)
+    if (req.user?.role === "Lab Manager") {
+      const ok = await get(
+        "SELECT 1 as ok FROM projects WHERE id = ? AND manager_id = ?",
+        [req.params.id, req.user.id]
+      );
+      if (!ok) return res.status(403).json({ error: "forbidden" });
+    } else if (req.user?.role === "Researcher") {
+      const ok = await get(
+        "SELECT 1 as ok FROM project_users WHERE project_id = ? AND user_id = ?",
+        [req.params.id, req.user.id]
+      );
+      if (!ok) return res.status(403).json({ error: "forbidden" });
+    }
+
     const project = await get(
       `
       SELECT
@@ -68,16 +102,20 @@ router.get("/:id", async (req, res) => {
 
     if (!project) return res.status(404).json({ error: "project not found" });
 
-    const lineItems = await all(
-      `
+    let lineItemsQuery = `
       SELECT li.*, u.name as requestor_name
       FROM line_items li
       JOIN users u ON li.requestor_id = u.id
       WHERE li.project_id = ?
-      ORDER BY li.request_date DESC
-    `,
-      [req.params.id]
-    );
+    `;
+    const liParams = [req.params.id];
+    if (req.user?.role === "Researcher") {
+      lineItemsQuery += " AND li.requestor_id = ?";
+      liParams.push(req.user.id);
+    }
+    lineItemsQuery += " ORDER BY li.request_date DESC";
+
+    const lineItems = await all(lineItemsQuery, liParams);
 
     res.json({ ...project, line_items: lineItems });
   } catch (err) {
