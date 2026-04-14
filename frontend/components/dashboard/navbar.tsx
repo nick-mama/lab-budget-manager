@@ -56,7 +56,7 @@ export function Navbar({ title, subtitle }: NavbarProps) {
 
       <div className="flex items-center gap-4">
         {/* Active user (demo auth) */}
-        <div className="hidden lg:block">
+        <div className="block">
           <Label className="sr-only">Active user</Label>
           <Select
             value={userId ? String(userId) : ""}
