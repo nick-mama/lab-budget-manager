@@ -131,8 +131,10 @@ router.post("/", requireRole(["Researcher", "Lab Manager", "Financial Admin"]), 
       });
     }
 
+    // Researchers can only submit for projects they are assigned to.
+    // Lab managers can submit only for projects they manage.
+    // Financial admins can submit for any project.
     const pid = Number(project_id);
-
     if (req.user.role === "Researcher") {
       const member = await isProjectMember(pid, req.user.id);
       if (!member) return res.status(403).json({ error: "not assigned to this project" });
@@ -227,17 +229,8 @@ router.put("/:id", requireUser, async (req, res) => {
       }
     }
 
-    // FIX: resolve new project_id and its budget_id upfront
-    const newPid = Number(project_id ?? item.project_id);
-    const oldPid = Number(item.project_id);
-    const projectChanged = newPid !== oldPid;
-
-    let newBudgetId = item.budget_id;
-    if (projectChanged) {
-      const newBudget = await get("SELECT id FROM budgets WHERE project_id = ?", [newPid]);
-      if (!newBudget) return res.status(400).json({ error: "target project has no budget" });
-      newBudgetId = newBudget.id;
-    }
+    // Apply updates (use conditional fields for audit columns)
+    const pid = Number(project_id ?? item.project_id);
 
     await run(
       `
@@ -245,7 +238,6 @@ router.put("/:id", requireUser, async (req, res) => {
       SET
         description = ?,
         project_id = ?,
-        budget_id = ?,
         type = ?,
         amount = ?,
         request_date = ?,
@@ -270,8 +262,7 @@ router.put("/:id", requireUser, async (req, res) => {
     `,
       [
         description ?? item.description,
-        newPid,
-        newBudgetId,
+        pid,
         type ?? item.type,
         amount ?? item.amount,
         request_date ?? item.request_date,
@@ -286,13 +277,15 @@ router.put("/:id", requireUser, async (req, res) => {
       ]
     );
 
+    // If project changed while pending, keep budget_id consistent
     const updatedRow = await get("SELECT * FROM line_items WHERE id = ?", [req.params.id]);
-
-    // FIX: recalc both old and new project budgets if project changed
-    await recalcBudgetForProject(newPid);
-    if (projectChanged) {
-      await recalcBudgetForProject(oldPid);
+    if (updatedRow && updatedRow.budget_id == null) {
+      const b = await get("SELECT id FROM budgets WHERE project_id = ?", [updatedRow.project_id]);
+      if (b) await run("UPDATE line_items SET budget_id = ? WHERE id = ?", [b.id, updatedRow.id]);
     }
+
+    // Recalc budget after status change (or any edit that could affect totals)
+    await recalcBudgetForProject(Number(updatedRow.project_id));
 
     res.json(updatedRow);
   } catch (err) {
