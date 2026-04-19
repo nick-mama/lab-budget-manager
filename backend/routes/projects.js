@@ -150,12 +150,20 @@ router.post("/", requireRole(["Lab Manager", "Financial Admin"]), async (req, re
       [project_code, name, manager_id, start_date, end_date, budget, status ?? "active"]
     );
 
+    // create a corresponding budget row so line items can be submitted against this project
+    await run(
+      "INSERT INTO budgets (project_id, total_allocated_amount, remaining_balance) VALUES (?, ?, ?)",
+      [result.lastInsertRowid, budget, budget]
+    );
+
     const project = await get("SELECT * FROM projects WHERE id = ?", [result.lastInsertRowid]);
+
     // ensure membership for manager
     await run("INSERT IGNORE INTO project_users (project_id, user_id) VALUES (?, ?)", [
       result.lastInsertRowid,
       manager_id,
     ]);
+
     res.status(201).json(project);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -179,6 +187,8 @@ router.put("/:id", requireRole(["Lab Manager", "Financial Admin"]), async (req, 
       return res.status(403).json({ error: "lab managers cannot reassign project manager" });
     }
 
+    const newBudget = budget ?? project.budget;
+
     await run(
       `
       UPDATE projects
@@ -190,11 +200,20 @@ router.put("/:id", requireRole(["Lab Manager", "Financial Admin"]), async (req, 
         manager_id ?? project.manager_id,
         start_date ?? project.start_date,
         end_date ?? project.end_date,
-        budget ?? project.budget,
+        newBudget,
         status ?? project.status,
         req.params.id,
       ]
     );
+
+    // keep budgets table in sync when the allocated amount changes
+    if (budget !== undefined && Number(budget) !== Number(project.budget)) {
+      const diff = Number(budget) - Number(project.budget);
+      await run(
+        "UPDATE budgets SET total_allocated_amount = ?, remaining_balance = remaining_balance + ? WHERE project_id = ?",
+        [budget, diff, req.params.id]
+      );
+    }
 
     const updated = await get("SELECT * FROM projects WHERE id = ?", [req.params.id]);
     await run("INSERT IGNORE INTO project_users (project_id, user_id) VALUES (?, ?)", [
@@ -218,6 +237,8 @@ router.delete("/:id", requireRole(["Lab Manager", "Financial Admin"]), async (re
     }
 
     await run("DELETE FROM line_items WHERE project_id = ?", [req.params.id]);
+    await run("DELETE FROM budgets WHERE project_id = ?", [req.params.id]);
+    await run("DELETE FROM project_users WHERE project_id = ?", [req.params.id]);
     await run("DELETE FROM projects WHERE id = ?", [req.params.id]);
 
     res.json({ message: "project deleted" });
