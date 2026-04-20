@@ -13,17 +13,17 @@ The system helps research labs stay within budget while improving visibility int
 ## Features
 
 - **Project & Budget Tracking**
-  - View project budgets, allocated funds, expenses, and remaining balance
+    - View project budgets, allocated funds, expenses, and remaining balance
 - **Expense & Revenue Requests**
-  - Submit, review, and manage financial line items
+    - Submit, review, and manage financial line items
 - **Approval Workflow**
-  - Approve or reject requests with role-based permissions
+    - Approve or reject requests with role-based permissions
 - **Reimbursement Management**
-  - Mark approved requests as reimbursed or paid
+    - Mark approved requests as reimbursed or paid
 - **Financial Summaries**
-  - Generate budget and spending summaries across projects
+    - Generate budget and spending summaries across projects
 - **Role-Based Access Control**
-  - Researcher, Lab Manager, Financial Admin
+    - Researcher, Lab Manager, Financial Admin
 
 ---
 
@@ -86,33 +86,33 @@ Represents an individual financial transaction or request, including amount, typ
 The system is structured around the following primary tables:
 
 - **Project**
-  - `project_id`
-  - `project_name`
-  - `start_date`
-  - `end_date`
-  - `status`
+    - `project_id`
+    - `project_name`
+    - `start_date`
+    - `end_date`
+    - `status`
 
 - **User**
-  - `user_id`
-  - `first_name`
-  - `last_name`
-  - `email`
-  - `role_type`
+    - `user_id`
+    - `first_name`
+    - `last_name`
+    - `email`
+    - `role_type`
 
 - **Budget**
-  - `budget_id`
-  - `total_allocated_amount`
-  - `remaining_balance`
+    - `budget_id`
+    - `total_allocated_amount`
+    - `remaining_balance`
 
 - **Line_Item**
-  - `line_item_id`
-  - `amount`
-  - `request_type`
-  - `status`
-  - `request_date`
-  - `decision_date`
-  - `payment_date`
-  - `rejection_reason`
+    - `line_item_id`
+    - `amount`
+    - `request_type`
+    - `status`
+    - `request_date`
+    - `decision_date`
+    - `payment_date`
+    - `rejection_reason`
 
 SQL is used to store and manage all project, user, budget, and financial request data.
 
@@ -157,12 +157,12 @@ This project was developed as part of a database systems course. It models real-
 
 ---
 
-## Quick Start for Frontend
+## Quick Start for Project
 
 ```bash
 git clone https://github.com/nick-mama/lab-budget-manager.git
-cd lab-budget-manager/frontend
-npm install
+cd lab-budget-manager
+npm run reinstall
 npm run dev
 ```
 
