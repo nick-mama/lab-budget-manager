@@ -7,6 +7,15 @@ import {
 } from "@/components/ui/table";
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { MoreHorizontal, ArrowUpRight, ArrowDownLeft } from "lucide-react";
 import { useApi } from "@/lib/api-client";
 
@@ -25,13 +34,25 @@ type LineItem = {
 type Props = {
   filters?: { search: string; status: string; type: string; project_id: string };
   refreshKey?: number;
+  onRefresh?: () => void;
 };
 
-export function LineItemsTable({ filters, refreshKey }: Props) {
-  const { apiFetch } = useApi();
+export function LineItemsTable({ filters, refreshKey, onRefresh }: Props) {
+  const { apiFetch, userId } = useApi();
   const [items, setItems] = React.useState<LineItem[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [userRole, setUserRole] = React.useState<string | null>(null);
 
+  // fetch current user's role
+  React.useEffect(() => {
+    if (!userId) return;
+    apiFetch(`/api/users/${userId}`)
+      .then((res) => res.json())
+      .then((u) => setUserRole(u.role ?? null))
+      .catch(console.error);
+  }, [userId, apiFetch]);
+
+  // fetch line items
   React.useEffect(() => {
     setLoading(true);
     const params = new URLSearchParams();
@@ -56,57 +77,149 @@ export function LineItemsTable({ filters, refreshKey }: Props) {
     );
   }, [items, filters?.search]);
 
+  // rejection modal state
+  const [rejectItem, setRejectItem] = React.useState<LineItem | null>(null);
+  const [rejectionReason, setRejectionReason] = React.useState("");
+  const [rejecting, setRejecting] = React.useState(false);
+
+  async function updateStatus(item: LineItem, status: string, extra: Record<string, string> = {}) {
+    const res = await apiFetch(`/api/line-items/${item.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status, ...extra }),
+    });
+    if (res.ok) onRefresh?.();
+    else {
+      const data = await res.json();
+      alert(data.error ?? "Action failed.");
+    }
+  }
+
+  async function handleReject() {
+    if (!rejectItem || !rejectionReason.trim()) return;
+    setRejecting(true);
+    await updateStatus(rejectItem, "rejected", { rejection_reason: rejectionReason });
+    setRejecting(false);
+    setRejectItem(null);
+    setRejectionReason("");
+  }
+
+  function getActions(item: LineItem) {
+    const actions: React.ReactNode[] = [];
+
+    if (userRole === "Lab Manager" && item.status === "pending") {
+      actions.push(
+        <DropdownMenuItem key="approve" onClick={() => updateStatus(item, "approved")}>
+          Approve
+        </DropdownMenuItem>
+      );
+      actions.push(
+        <DropdownMenuItem key="reject" className="text-red-500" onClick={() => { setRejectItem(item); setRejectionReason(""); }}>
+          Reject
+        </DropdownMenuItem>
+      );
+    }
+
+    if (userRole === "Financial Admin" && item.status === "approved") {
+      actions.push(
+        <DropdownMenuItem key="reimburse" onClick={() => updateStatus(item, "reimbursed")}>
+          Mark as Reimbursed
+        </DropdownMenuItem>
+      );
+    }
+
+    if (actions.length === 0) {
+      actions.push(
+        <DropdownMenuItem key="none" disabled>No actions available</DropdownMenuItem>
+      );
+    }
+
+    return actions;
+  }
+
   return (
-    <Card className="bg-card">
-      <CardContent className="p-0">
-        <Table>
-          <TableHeader>
-            <TableRow className="border-border hover:bg-transparent">
-              <TableHead className="text-muted-foreground">ID</TableHead>
-              <TableHead className="text-muted-foreground">Description</TableHead>
-              <TableHead className="text-muted-foreground">Project</TableHead>
-              <TableHead className="text-muted-foreground">Requestor</TableHead>
-              <TableHead className="text-muted-foreground">Type</TableHead>
-              <TableHead className="text-muted-foreground">Amount</TableHead>
-              <TableHead className="text-muted-foreground">Date</TableHead>
-              <TableHead className="text-muted-foreground">Status</TableHead>
-              <TableHead className="text-right text-muted-foreground">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">Loading...</TableCell></TableRow>
-            ) : filtered.length === 0 ? (
-              <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">No line items found.</TableCell></TableRow>
-            ) : (
-              filtered.map((item) => (
-                <TableRow key={item.id} className="border-border">
-                  <TableCell className="font-medium text-accent">{item.item_code}</TableCell>
-                  <TableCell className="max-w-[200px] truncate font-medium text-foreground">{item.description}</TableCell>
-                  <TableCell className="text-foreground">{item.project_name}</TableCell>
-                  <TableCell className="text-foreground">{item.requestor_name}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      {item.type === "expense" ? <ArrowUpRight className="h-4 w-4 text-[#D32F2F]" /> : <ArrowDownLeft className="h-4 w-4 text-[#2E7D32]" />}
-                      <span className="capitalize text-foreground">{item.type}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className={`font-medium ${item.type === "expense" ? "text-[#D32F2F]" : "text-[#2E7D32]"}`}>
-                    {item.type === "expense" ? "-" : "+"}${Number(item.amount).toLocaleString()}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{item.request_date?.slice(0, 10)}</TableCell>
-                  <TableCell><StatusBadge status={item.status} /></TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                      <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+    <>
+      <Card className="bg-card">
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow className="border-border hover:bg-transparent">
+                <TableHead className="text-muted-foreground">ID</TableHead>
+                <TableHead className="text-muted-foreground">Description</TableHead>
+                <TableHead className="text-muted-foreground">Project</TableHead>
+                <TableHead className="text-muted-foreground">Requestor</TableHead>
+                <TableHead className="text-muted-foreground">Type</TableHead>
+                <TableHead className="text-muted-foreground">Amount</TableHead>
+                <TableHead className="text-muted-foreground">Date</TableHead>
+                <TableHead className="text-muted-foreground">Status</TableHead>
+                <TableHead className="text-right text-muted-foreground">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">Loading...</TableCell></TableRow>
+              ) : filtered.length === 0 ? (
+                <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">No line items found.</TableCell></TableRow>
+              ) : (
+                filtered.map((item) => (
+                  <TableRow key={item.id} className="border-border">
+                    <TableCell className="font-medium text-accent">{item.item_code}</TableCell>
+                    <TableCell className="max-w-[200px] truncate font-medium text-foreground">{item.description}</TableCell>
+                    <TableCell className="text-foreground">{item.project_name}</TableCell>
+                    <TableCell className="text-foreground">{item.requestor_name}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        {item.type === "expense" ? <ArrowUpRight className="h-4 w-4 text-[#D32F2F]" /> : <ArrowDownLeft className="h-4 w-4 text-[#2E7D32]" />}
+                        <span className="capitalize text-foreground">{item.type}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className={`font-medium ${item.type === "expense" ? "text-[#D32F2F]" : "text-[#2E7D32]"}`}>
+                      {item.type === "expense" ? "-" : "+"}${Number(item.amount).toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{item.request_date?.slice(0, 10)}</TableCell>
+                    <TableCell><StatusBadge status={item.status} /></TableCell>
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {getActions(item)}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Rejection reason modal */}
+      <Dialog open={!!rejectItem} onOpenChange={(o) => { if (!o) setRejectItem(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reject Line Item</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-2 py-2">
+            <Label>Reason for rejection</Label>
+            <Input
+              placeholder="Enter reason..."
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRejectItem(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleReject} disabled={rejecting || !rejectionReason.trim()}>
+              {rejecting ? "Rejecting..." : "Reject"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

@@ -28,7 +28,7 @@ export default function LineItemsPage() {
         />
       </div>
       <div className="mt-6">
-        <LineItemsTable filters={filters} refreshKey={refreshKey} />
+        <LineItemsTable filters={filters} refreshKey={refreshKey} onRefresh={() => setRefreshKey((k) => k + 1)} />
       </div>
     </DashboardLayout>
   );
