@@ -1,52 +1,19 @@
 "use client";
 
+import * as React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Mail, MoreHorizontal, FolderKanban } from "lucide-react";
+import { useApi } from "@/lib/api-client";
 
-// Sample user data
-const users = [
-  {
-    id: "USR-001",
-    name: "Geoffrey Agustin",
-    email: "geoffrey.agustin@university.edu",
-    role: "Lab Manager",
-    projects: ["Biotech Lab Development", "Neural Networks Study"],
-    avatar: "GA",
-  },
-  {
-    id: "USR-002",
-    name: "Camden Forbes",
-    email: "camden.forbes@university.edu",
-    role: "Researcher",
-    projects: ["Quantum Computing Lab"],
-    avatar: "CF",
-  },
-  {
-    id: "USR-003",
-    name: "Mehak Jammu",
-    email: "mehak.jammu@university.edu",
-    role: "Lab Manager",
-    projects: ["Neural Networks Study"],
-    avatar: "MJ",
-  },
-  {
-    id: "USR-004",
-    name: "Nick Mamaoag",
-    email: "nick.mamaoag@university.edu",
-    role: "Lab Manager",
-    projects: ["Biotech Lab Development"],
-    avatar: "NM",
-  },
-  {
-    id: "USR-005",
-    name: "Christopher Velez",
-    email: "christopher.velez@university.edu",
-    role: "Financial Admin",
-    projects: ["All Projects"],
-    avatar: "CV",
-  },
-];
+type ApiUser = {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  avatar: string;
+  projects: string[];
+};
 
 function getRoleBadgeStyles(role: string): string {
   switch (role) {
@@ -61,16 +28,80 @@ function getRoleBadgeStyles(role: string): string {
   }
 }
 
-export function UsersGrid() {
+type Props = {
+  filters?: { search: string; role: string };
+  refreshKey?: number;
+};
+
+export function UsersGrid({ filters, refreshKey }: Props) {
+  const { apiFetch } = useApi();
+  const [users, setUsers] = React.useState<ApiUser[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const params = new URLSearchParams();
+        if (filters?.role && filters.role !== "all") params.set("role", filters.role);
+        const res = await apiFetch(`/api/users${params.toString() ? `?${params.toString()}` : ""}`);
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || res.statusText);
+        }
+        const data = (await res.json()) as ApiUser[];
+        if (!cancelled) setUsers(Array.isArray(data) ? data : []);
+      } catch (e) {
+        if (!cancelled) {
+          setUsers([]);
+          setError(e instanceof Error ? e.message : "Failed to load users");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [apiFetch, filters?.role, refreshKey]);
+
+  const filtered = React.useMemo(() => {
+    const q = filters?.search?.trim().toLowerCase() ?? "";
+    if (!q) return users;
+    return users.filter((u) =>
+      u.name?.toLowerCase().includes(q) ||
+      u.email?.toLowerCase().includes(q) ||
+      u.role?.toLowerCase().includes(q) ||
+      (Array.isArray(u.projects) ? u.projects.join(", ").toLowerCase().includes(q) : false)
+    );
+  }, [users, filters?.search]);
+
+  if (loading) {
+    return <p className="text-muted-foreground text-sm">Loading team members…</p>;
+  }
+
+  if (error) {
+    return (
+      <p className="text-destructive text-sm" role="alert">
+        {error}
+      </p>
+    );
+  }
+
   return (
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-      {users.map((user) => (
+      {filtered.length === 0 ? (
+        <p className="text-muted-foreground text-sm">No team members found.</p>
+      ) : filtered.map((user) => (
         <Card key={user.id} className="bg-card">
           <CardContent className="p-6">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-4">
                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
-                  {user.avatar}
+                  {user.avatar ?? user.name?.slice(0, 2)?.toUpperCase()}
                 </div>
                 <div>
                   <h3 className="font-semibold text-foreground">{user.name}</h3>
@@ -95,7 +126,9 @@ export function UsersGrid() {
               </div>
               <div className="flex items-start gap-2 text-sm text-muted-foreground">
                 <FolderKanban className="mt-0.5 h-4 w-4 shrink-0" />
-                <span className="line-clamp-2">{user.projects.join(", ")}</span>
+                <span className="line-clamp-2">
+                  {(Array.isArray(user.projects) ? user.projects : ["No Projects"]).join(", ")}
+                </span>
               </div>
             </div>
 
