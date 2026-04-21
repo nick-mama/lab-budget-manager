@@ -167,3 +167,69 @@ npm run dev
 ```
 
 Open http://localhost:3000
+
+---
+
+## Backend Startup Guide (Database + API)
+
+The backend lives in `backend/` and uses **Node/Express + MySQL** (`mysql2`). On startup, it will:
+
+- Create any missing tables (DDL is in `backend/db.js`)
+- Seed sample data **only if** the `users` table is empty
+
+### Prerequisites
+
+- **Node.js + npm**
+- **MySQL** (running locally)
+
+### 1) Create the MySQL database
+
+Create the database (tables will be created by the app on first start):
+
+```sql
+CREATE DATABASE IF NOT EXISTS lab_budget_manager;
+```
+
+If you prefer, you can also run the SQL scripts in `database/` manually:
+
+- `database/schema.sql` (design-doc style tables)
+- `database/app_schema_mysql.sql` (tables used by the Express API)
+
+### 2) Create your `.env` file (repo root)
+
+Copy `.env.example` to `.env` in the **repo root** and adjust values for your MySQL install:
+
+```bash
+cp .env.example .env
+```
+
+Minimum required environment variables:
+
+- `MYSQL_USER`
+- `MYSQL_DATABASE`
+- `MYSQL_PASSWORD` (blank is OK for local dev)
+- `MYSQL_HOST` (defaults to `127.0.0.1`)
+- `MYSQL_PORT` (defaults to `3306`)
+
+### 3) Install backend dependencies
+
+From the repo root:
+
+```bash
+npm --prefix backend install
+```
+
+### 4) Start the backend
+
+From the repo root:
+
+```bash
+npm --prefix backend run dev
+```
+
+The API will start on `http://localhost:3001`.
+
+### Notes
+
+- **Auto-create tables**: `backend/db.js` runs `ensureSchema()` on startup, so you only need to create the database itself.
+- **Auto-seed data**: the backend seeds sample users/projects/line items when `users` is empty (first run on a fresh DB).
