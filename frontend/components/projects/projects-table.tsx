@@ -77,7 +77,10 @@ export function ProjectsTable({ projects, loading }: ProjectsTableProps) {
           <TableBody>
             {projects.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-muted-foreground h-24 text-center">
+                <TableCell
+                  colSpan={9}
+                  className="text-muted-foreground h-24 text-center"
+                >
                   No projects yet. Create one with New Project.
                 </TableCell>
               </TableRow>
@@ -110,11 +113,6 @@ export function ProjectsTable({ projects, loading }: ProjectsTableProps) {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <Link href={`/projects/${project.id}`}>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <Eye className="text-muted-foreground h-4 w-4" />
-                        </Button>
-                      </Link>
                       <Button variant="ghost" size="icon" className="h-8 w-8">
                         <MoreHorizontal className="text-muted-foreground h-4 w-4" />
                       </Button>
