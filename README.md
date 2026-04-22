@@ -17,12 +17,13 @@ git clone https://github.com/nick-mama/lab-budget-manager.git
 cd lab-budget-manager
 cp .env.example .env
 ```
-> On Windows PowerShell, use `Copy-Item .env.example .env`
 
+> On Windows PowerShell, use `Copy-Item .env.example .env`
 
 Update `.env` with your MySQL credentials.
 
 Make sure MySQL is running, then create the database:
+
 ```sql
 CREATE DATABASE IF NOT EXISTS lab_budget_manager;
 ```
@@ -183,52 +184,17 @@ This project was developed as part of a database systems course. It models real-
 
 ---
 
-## Frontend Startup Guide (UI)
+## Frontend Info (UI)
+
 The frontend lives in `frontend/` and is built with **Next.js (App Router)**. It communicates with the backend API running on port `3001`.
 
 ### Prerequisites
+
 - Node.js + npm
-- Backend server running (see Backend Startup Guide below)
-
-### 1) Install frontend dependencies
-
-From the repo root:
-```bash
-npm --prefix frontend install
-```
-
-### 2) (Optional) Configure environment variables
-
-If the frontend uses environment variables (e.g., API base URL), create a `.env` file inside the `frontend/` directory:
-
-```bash
-cp frontend/.env.example frontend/.env
-```
-
-If no `.env.example` exists or no API URL is needed, this step can be skipped.
-
-### 3) Start the frontend
-From the repo root:
-```bash
-npm --prefix frontend run dev
-```
-
-### 4) Open the app
-
-The frontend will start on `http://localhost:3000`
-
-### Notes
-
-- The frontend runs on **port 3000** by default (Next.js).
-- The backend runs on **port 3001**.
-- Make sure both are running at the same time.
-- If you visit `http://localhost:3001` directly, you may see `Cannot GET /` — this is expected (API only).
-- Hot reload is enabled — changes update automatically in the browser
-- If port `3000` is in use, Next.js will prompt to use another port.
 
 ---
 
-## Backend Startup Guide (Database + API)
+## Backend Info (Database + API)
 
 The backend lives in `backend/` and uses **Node/Express + MySQL** (`mysql2`). On startup, it will:
 
@@ -239,6 +205,10 @@ The backend lives in `backend/` and uses **Node/Express + MySQL** (`mysql2`). On
 
 - **Node.js + npm**
 - **MySQL** (running locally)
+
+---
+
+## Startup Guide
 
 ### 1) Create the MySQL database
 
@@ -269,25 +239,32 @@ Minimum required environment variables:
 - `MYSQL_HOST` (defaults to `127.0.0.1`)
 - `MYSQL_PORT` (defaults to `3306`)
 
-### 3) Install backend dependencies
+### 3) Install dependencies
 
 From the repo root:
 
 ```bash
-npm --prefix backend install
+npm run reinstall
 ```
 
-### 4) Start the backend
+### 4) Start the server
 
 From the repo root:
 
 ```bash
-npm --prefix backend run dev
+npm run dev
 ```
 
+The frontend will start on `http://localhost:3000`
 The API will start on `http://localhost:3001`.
 
 ### Notes
 
+- The frontend runs on **port 3000** by default (Next.js).
+- The backend runs on **port 3001**.
+- Make sure both are running at the same time.
+- If you visit `http://localhost:3001` directly, you may see `Cannot GET /` — this is expected (API only).
+- Hot reload is enabled — changes update automatically in the browser
+- If port `3000` is in use, Next.js will prompt to use another port.
 - **Auto-create tables**: `backend/db.js` runs `ensureSchema()` on startup, so you only need to create the database itself.
 - **Auto-seed data**: the backend seeds sample users/projects/line items when `users` is empty (first run on a fresh DB).
