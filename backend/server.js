@@ -9,14 +9,18 @@ const lineItemsRouter = require("./routes/lineItems");
 const dashboardRouter = require("./routes/dashboard");
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 4000;
 
-app.use(
-  cors({
-    origin: "http://localhost:3001",
-    allowedHeaders: ["Content-Type", "x-user-id"],
-  })
-);
+const corsOptions = {
+  origin: "http://localhost:3000",
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+};
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
+
 app.use(express.json());
 app.use(attachUser);
 
@@ -31,9 +35,9 @@ app.get("/api/health", (req, res) => {
 
 initDb().then(() => {
   app.listen(PORT, () => {
-    console.log(`server running on http://localhost:${PORT}`);
+    console.log(`Server running on http://localhost:${PORT}`);
   });
 }).catch((err) => {
-  console.error("failed to initialize database:", err);
+  console.error("Failed to initialize database:", err);
   process.exit(1);
 });

@@ -186,7 +186,7 @@ This project was developed as part of a database systems course. It models real-
 
 ## Frontend Info (UI)
 
-The frontend lives in `frontend/` and is built with **Next.js (App Router)**. It communicates with the backend API running on port `3001`.
+The frontend lives in `frontend/` and is built with **Next.js (App Router)**. It communicates with the backend API running on port `4000`.
 
 ### Prerequisites
 
@@ -256,14 +256,14 @@ npm run dev
 ```
 
 The frontend will start on `http://localhost:3000`
-The API will start on `http://localhost:3001`.
+The API will start on `http://localhost:4000`.
 
 ### Notes
 
 - The frontend runs on **port 3000** by default (Next.js).
-- The backend runs on **port 3001**.
+- The backend runs on **port 4000**.
 - Make sure both are running at the same time.
-- If you visit `http://localhost:3001` directly, you may see `Cannot GET /` — this is expected (API only).
+- If you visit `http://localhost:4000` directly, you may see `Cannot GET /` — this is expected (API only).
 - Hot reload is enabled — changes update automatically in the browser
 - If port `3000` is in use, Next.js will prompt to use another port.
 - **Auto-create tables**: `backend/db.js` runs `ensureSchema()` on startup, so you only need to create the database itself.
