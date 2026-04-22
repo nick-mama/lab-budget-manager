@@ -244,7 +244,7 @@ Minimum required environment variables:
 From the repo root:
 
 ```bash
-npm run reinstall
+npm run install:all
 ```
 
 ### 4) Start the server
