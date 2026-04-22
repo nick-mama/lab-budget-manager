@@ -11,8 +11,14 @@ import {
 } from "@/components/ui/table";
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal, Eye } from "lucide-react";
-import Link from "next/link";
+import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ApiProject } from "@/components/projects/projects-view";
 
@@ -33,10 +39,45 @@ function normalizeStatus(s: string): ProjectStatus {
 
 interface ProjectsTableProps {
   projects: ApiProject[];
+  setProjects: React.Dispatch<React.SetStateAction<ApiProject[]>>;
   loading?: boolean;
 }
 
-export function ProjectsTable({ projects, loading }: ProjectsTableProps) {
+export function ProjectsTable({
+  projects,
+  setProjects,
+  loading,
+}: ProjectsTableProps) {
+  const router = useRouter();
+
+  async function handleDelete(projectId: number) {
+    const confirmed = window.confirm("Delete this project?");
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch(
+        `http://localhost:4000/api/projects/${projectId}`,
+        {
+          method: "DELETE",
+          // In a real app, you'd get the user ID from auth context or cookies
+          headers: {
+            // to test if working, change this ID to 5 to delete any project (Financial Admin ID)
+            // Ex: "x-user-id": "5",
+            // Any other user ID will only be able to delete projects they manage
+            "x-user-id": "5",
+          },
+        },
+      );
+
+      if (!res.ok) throw new Error("Delete failed");
+
+      setProjects((prev) => prev.filter((p) => p.id !== projectId));
+    } catch (error) {
+      console.error(error);
+      alert("Delete failed");
+    }
+  }
+
   if (loading) {
     return (
       <Card className="bg-card">
@@ -112,11 +153,32 @@ export function ProjectsTable({ projects, loading }: ProjectsTableProps) {
                     <StatusBadge status={normalizeStatus(project.status)} />
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <MoreHorizontal className="text-muted-foreground h-4 w-4" />
-                      </Button>
-                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreHorizontal className="text-muted-foreground h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={() =>
+                            router.push(`/projects/${project.id}/edit`)
+                          }
+                        >
+                          <Pencil className="mr-2 h-4 w-4" />
+                          Edit
+                        </DropdownMenuItem>
+
+                        <DropdownMenuItem
+                          onClick={() => handleDelete(project.id)}
+                          className="text-red-600 focus:text-red-600"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))

@@ -58,7 +58,11 @@ export function ProjectsView() {
       ) : null}
       <ProjectsHeader onProjectCreated={load} />
       <div className="mt-6">
-        <ProjectsTable projects={projects} loading={loading} />
+        <ProjectsTable
+          projects={projects}
+          setProjects={setProjects}
+          loading={loading}
+        />{" "}
       </div>
     </>
   );

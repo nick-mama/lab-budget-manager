@@ -1,5 +1,5 @@
-import { DashboardLayout } from "@/components/dashboard/dashboard-layout"
-import { ProjectsView } from "@/components/projects/projects-view"
+import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
+import { ProjectsView } from "@/components/projects/projects-view";
 
 export default function ProjectsPage() {
   return (
@@ -9,5 +9,5 @@ export default function ProjectsPage() {
     >
       <ProjectsView />
     </DashboardLayout>
-  )
+  );
 }
