@@ -107,14 +107,62 @@ router.put("/:id", requireRole("Financial Admin"), async (req, res) => {
   }
 });
 
-// delete a user
-router.delete("/:id", requireRole("Financial Admin"), async (req, res) => {
+// delete a user (financial admins only, with safety checks)
+router.delete("/:id", requireRole(["Financial Admin"]), async (req, res) => {
   try {
-    const user = await get("SELECT * FROM users WHERE id = ?", [req.params.id]);
-    if (!user) return res.status(404).json({ error: "user not found" });
+    const targetUserId = Number(req.params.id);
 
-    await run("DELETE FROM users WHERE id = ?", [req.params.id]);
-    res.json({ message: "user deleted" });
+    if (!Number.isFinite(targetUserId) || targetUserId <= 0) {
+      return res.status(400).json({ error: "invalid user id" });
+    }
+
+    // optional safety: don't let the active financial admin delete themself
+    if (Number(req.user.id) === targetUserId) {
+      return res.status(400).json({ error: "cannot remove the active user" });
+    }
+
+    const user = await get("SELECT * FROM users WHERE id = ?", [targetUserId]);
+    if (!user) {
+      return res.status(404).json({ error: "user not found" });
+    }
+
+    // prevent deleting users who still manage projects
+    const managedProjects = await get(
+      "SELECT COUNT(*) AS count FROM projects WHERE manager_id = ?",
+      [targetUserId],
+    );
+
+    if (Number(managedProjects?.count ?? 0) > 0) {
+      return res.status(400).json({
+        error:
+          "cannot remove a user who is still assigned as a project manager",
+      });
+    }
+
+    // prevent deleting users referenced by line items
+    const referencedLineItems = await get(
+      `
+      SELECT COUNT(*) AS count
+      FROM line_items
+      WHERE requestor_id = ?
+      OR approver_id = ?
+      `,
+      [targetUserId, targetUserId],
+    );
+
+    if (Number(referencedLineItems?.count ?? 0) > 0) {
+      return res.status(400).json({
+        error: "cannot remove a user who is referenced by line items",
+      });
+    }
+
+    // remove project membership rows first
+    await run("DELETE FROM project_users WHERE user_id = ?", [targetUserId]);
+
+    // then remove the user
+    await run("DELETE FROM users WHERE id = ?", [targetUserId]);
+
+    res.json({ message: "user removed" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

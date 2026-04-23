@@ -1,10 +1,13 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Mail, MoreHorizontal, FolderKanban } from "lucide-react";
+import { Mail, FolderKanban } from "lucide-react";
 import { useApi } from "@/lib/api-client";
+import { useCurrentUser } from "@/hooks/use-current-user";
+import { toast } from "sonner";
 
 type ApiUser = {
   id: number;
@@ -34,38 +37,77 @@ type Props = {
 };
 
 export function UsersGrid({ filters, refreshKey }: Props) {
+  const router = useRouter();
   const { apiFetch } = useApi();
   const [users, setUsers] = React.useState<ApiUser[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const { user: currentUser } = useCurrentUser();
+
+  async function handleRemoveUser(userId: number) {
+    const confirmed = window.confirm("Remove this user?");
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch(`http://localhost:4000/api/users/${userId}`, {
+        method: "DELETE",
+        headers: {
+          "x-user-id": currentUser ? String(currentUser.id) : "5",
+        },
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "Failed to remove user");
+      }
+
+      setUsers((prev) => prev.filter((user) => user.id !== userId));
+      toast.success("User removed successfully.");
+    } catch (error) {
+      console.error(error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to remove user.",
+      );
+    }
+  }
 
   React.useEffect(() => {
     let cancelled = false;
+
     (async () => {
       setLoading(true);
       setError(null);
       try {
         const params = new URLSearchParams();
-        if (filters?.role && filters.role !== "all")
+        if (filters?.role && filters.role !== "all") {
           params.set("role", filters.role);
+        }
+
         const res = await apiFetch(
           `/api/users${params.toString() ? `?${params.toString()}` : ""}`,
         );
+
         if (!res.ok) {
           const text = await res.text();
           throw new Error(text || res.statusText);
         }
+
         const data = (await res.json()) as ApiUser[];
-        if (!cancelled) setUsers(Array.isArray(data) ? data : []);
+        if (!cancelled) {
+          setUsers(Array.isArray(data) ? data : []);
+        }
       } catch (e) {
         if (!cancelled) {
           setUsers([]);
           setError(e instanceof Error ? e.message : "Failed to load users");
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     })();
+
     return () => {
       cancelled = true;
     };
@@ -74,6 +116,7 @@ export function UsersGrid({ filters, refreshKey }: Props) {
   const filtered = React.useMemo(() => {
     const q = filters?.search?.trim().toLowerCase() ?? "";
     if (!q) return users;
+
     return users.filter(
       (u) =>
         u.name?.toLowerCase().includes(q) ||
@@ -125,9 +168,6 @@ export function UsersGrid({ filters, refreshKey }: Props) {
                     </span>
                   </div>
                 </div>
-                <Button variant="ghost" size="icon" className="h-8 w-8">
-                  <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
-                </Button>
               </div>
 
               <div className="mt-4 space-y-3">
@@ -135,6 +175,7 @@ export function UsersGrid({ filters, refreshKey }: Props) {
                   <Mail className="h-4 w-4" />
                   <span className="truncate">{user.email}</span>
                 </div>
+
                 <div className="flex items-start gap-2 text-sm text-muted-foreground">
                   <FolderKanban className="mt-0.5 h-4 w-4 shrink-0" />
                   <span className="line-clamp-2">
@@ -147,9 +188,24 @@ export function UsersGrid({ filters, refreshKey }: Props) {
               </div>
 
               <div className="mt-4 flex gap-2">
-                <Button variant="outline" size="sm" className="flex-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => router.push(`/users/${user.id}`)}
+                >
                   View Profile
                 </Button>
+
+                {currentUser?.role === "Financial Admin" &&
+                currentUser.id !== user.id ? (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => handleRemoveUser(user.id)}
+                  >
+                    Remove User
+                  </Button>
+                ) : null}
               </div>
             </CardContent>
           </Card>
