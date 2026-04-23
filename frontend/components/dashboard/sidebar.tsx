@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -23,12 +24,55 @@ const navigation = [
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 
+type UserRecord = {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+};
+
+function getInitials(name: string) {
+  return name
+    .trim()
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}
+
 export function Sidebar() {
   const pathname = usePathname();
+  const currentUserId = 5;
+
+  const [user, setUser] = useState<UserRecord | null>(null);
+
+  useEffect(() => {
+    async function loadUser() {
+      try {
+        const res = await fetch("http://localhost:4000/api/users", {
+          headers: {
+            "x-user-id": "5",
+          },
+        });
+
+        if (!res.ok) {
+          throw new Error("Failed to load users");
+        }
+
+        const users = (await res.json()) as UserRecord[];
+        const currentUser = users.find((u) => u.id === currentUserId) ?? null;
+        setUser(currentUser);
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
+    loadUser();
+  }, []);
 
   return (
     <aside className="fixed inset-y-0 left-0 z-50 flex h-full w-64 flex-col bg-primary">
-      {/* Logo */}
       <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-6">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent">
           <FlaskConical className="h-5 w-5 text-accent-foreground" />
@@ -43,7 +87,6 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 space-y-1 px-3 py-4">
         {navigation.map((item) => {
           const isActive = pathname === item.href;
@@ -65,17 +108,18 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* User section */}
       <div className="border-t border-sidebar-border p-4">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-medium text-accent-foreground">
-            NM
+            {user ? getInitials(user.name) : "--"}
           </div>
           <div className="flex-1">
             <p className="text-sm font-medium text-primary-foreground">
-              Nick Mamaoag
+              {user?.name ?? "Loading..."}
             </p>
-            <p className="text-xs text-primary-foreground/70">Lab Manager</p>
+            <p className="text-xs text-primary-foreground/70">
+              {user?.role ?? ""}
+            </p>
           </div>
           <button className="rounded-lg p-2 text-primary-foreground/70 hover:bg-primary-foreground/10 hover:text-primary-foreground">
             <LogOut className="h-4 w-4" />
