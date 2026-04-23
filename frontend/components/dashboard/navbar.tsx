@@ -21,38 +21,56 @@ interface NavbarProps {
   subtitle?: string;
 }
 
+type UserSummary = {
+  id: number;
+  name: string;
+  role: string;
+};
+
 export function Navbar({ title, subtitle }: NavbarProps) {
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  const { apiFetch, userId: authUserId } = useApi();
+  const { setUserId: setAuthUserId } = useAuth();
+
   const { userId: selectedUserId, setUserId: setSelectedUserId } =
     useCurrentUserStore();
-  const [showNotifications, setShowNotifications] = useState(false);
-  const { apiFetch, userId } = useApi();
-  const { setUserId } = useAuth();
-  const [users, setUsers] = useState<
-    Array<{ id: number; name: string; role: string }>
-  >([]);
+
+  const [users, setUsers] = useState<UserSummary[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+
     (async () => {
       setLoadingUsers(true);
       try {
         const res = await apiFetch("/api/users");
         if (!res.ok) return;
-        const data = (await res.json()) as Array<{
-          id: number;
-          name: string;
-          role: string;
-        }>;
-        if (!cancelled && Array.isArray(data)) setUsers(data);
+
+        const data = (await res.json()) as UserSummary[];
+
+        if (!cancelled && Array.isArray(data)) {
+          setUsers(data);
+        }
       } finally {
-        if (!cancelled) setLoadingUsers(false);
+        if (!cancelled) {
+          setLoadingUsers(false);
+        }
       }
     })();
+
     return () => {
       cancelled = true;
     };
   }, [apiFetch]);
+
+  // Keep store initialized from auth if store is empty
+  useEffect(() => {
+    if (!selectedUserId && authUserId) {
+      setSelectedUserId(authUserId);
+    }
+  }, [selectedUserId, authUserId, setSelectedUserId]);
 
   return (
     <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-border bg-card px-6">
@@ -64,7 +82,6 @@ export function Navbar({ title, subtitle }: NavbarProps) {
       </div>
 
       <div className="flex items-center gap-4">
-        {/* Active user (demo auth) */}
         <div className="block">
           <Label className="sr-only">Active user</Label>
           <Select
@@ -73,7 +90,7 @@ export function Navbar({ title, subtitle }: NavbarProps) {
               const n = Number(v);
               const nextUserId = Number.isFinite(n) && n > 0 ? n : null;
 
-              setUserId(nextUserId);
+              setAuthUserId(nextUserId);
               if (nextUserId) {
                 setSelectedUserId(nextUserId);
               }
@@ -94,7 +111,6 @@ export function Navbar({ title, subtitle }: NavbarProps) {
           </Select>
         </div>
 
-        {/* Search */}
         <div className="relative hidden md:block">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -104,7 +120,6 @@ export function Navbar({ title, subtitle }: NavbarProps) {
           />
         </div>
 
-        {/* Notifications */}
         <div className="relative">
           <Button
             variant="ghost"
@@ -121,7 +136,6 @@ export function Navbar({ title, subtitle }: NavbarProps) {
               <h3 className="mb-2 text-sm font-semibold text-foreground">
                 Notifications
               </h3>
-              {/* Sample notifications - replace with dynamic data as needed */}
               <div className="space-y-2 text-sm text-muted-foreground">
                 <p>New budget request submitted.</p>
                 <p>1 line item is awaiting review.</p>

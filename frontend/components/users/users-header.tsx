@@ -20,7 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Plus, Search } from "lucide-react";
-import { useApi } from "@/lib/api-client";
+import { useCurrentUserStore } from "@/lib/current-user-store";
 
 type Role = "Researcher" | "Lab Manager" | "Financial Admin";
 
@@ -29,8 +29,16 @@ type Props = {
   onCreated?: () => void;
 };
 
+type CurrentUserResponse = {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+};
+
 export function UsersHeader({ onFiltersChange, onCreated }: Props) {
-  const { apiFetch, userId } = useApi();
+  const { userId } = useCurrentUserStore();
+
   const [open, setOpen] = React.useState(false);
 
   const [search, setSearch] = React.useState("");
@@ -40,7 +48,6 @@ export function UsersHeader({ onFiltersChange, onCreated }: Props) {
     null,
   );
 
-  // create user form
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [newRole, setNewRole] = React.useState<Role>("Researcher");
@@ -56,21 +63,37 @@ export function UsersHeader({ onFiltersChange, onCreated }: Props) {
       setCurrentUserRole(null);
       return;
     }
+
     let cancelled = false;
+
     (async () => {
       try {
-        const res = await apiFetch(`/api/users/${userId}`);
-        if (!res.ok) return;
-        const u = (await res.json()) as { role?: string };
-        if (!cancelled) setCurrentUserRole(u.role ?? null);
+        const res = await fetch(`http://localhost:4000/api/users/${userId}`, {
+          headers: {
+            "x-user-id": String(userId),
+          },
+        });
+
+        if (!res.ok) {
+          throw new Error("Failed to load active user");
+        }
+
+        const u = (await res.json()) as CurrentUserResponse;
+
+        if (!cancelled) {
+          setCurrentUserRole(u.role ?? null);
+        }
       } catch {
-        if (!cancelled) setCurrentUserRole(null);
+        if (!cancelled) {
+          setCurrentUserRole(null);
+        }
       }
     })();
+
     return () => {
       cancelled = true;
     };
-  }, [apiFetch, userId]);
+  }, [userId]);
 
   const canCreate = currentUserRole === "Financial Admin";
 
@@ -84,36 +107,58 @@ export function UsersHeader({ onFiltersChange, onCreated }: Props) {
 
   async function handleCreate() {
     setError(null);
+
     if (!userId) {
       setError("Choose an active user in the top bar first.");
       return;
     }
+
     if (!canCreate) {
       setError("Only Financial Admin can add members.");
       return;
     }
+
     if (!name.trim() || !email.trim()) {
       setError("Name and email are required.");
       return;
     }
 
     setSubmitting(true);
+
     try {
-      const res = await apiFetch("/api/users", {
+      const res = await fetch("http://localhost:4000/api/users", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-id": String(userId),
+        },
         body: JSON.stringify({
           name: name.trim(),
           email: email.trim(),
           role: newRole,
         }),
       });
-      const body = await res.json().catch(() => ({}));
+
+      const text = await res.text();
+      let body: any = {};
+
+      try {
+        body = text ? JSON.parse(text) : {};
+      } catch {
+        body = {};
+      }
+
+      console.log("CREATE USER STATUS:", res.status);
+      console.log("CREATE USER RESPONSE:", body || text);
+
       if (!res.ok) {
         throw new Error(
-          typeof body.error === "string" ? body.error : "Could not create user",
+          typeof body.error === "string"
+            ? body.error
+            : text || "Could not create user",
         );
       }
+
       setOpen(false);
       resetForm();
       onCreated?.();
@@ -137,6 +182,7 @@ export function UsersHeader({ onFiltersChange, onCreated }: Props) {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+
         <Select value={role} onValueChange={setRole}>
           <SelectTrigger className="w-40 bg-card">
             <SelectValue placeholder="Role" />
@@ -165,6 +211,7 @@ export function UsersHeader({ onFiltersChange, onCreated }: Props) {
           <Plus className="h-4 w-4" />
           Add Member
         </Button>
+
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Add team member</DialogTitle>
@@ -206,6 +253,7 @@ export function UsersHeader({ onFiltersChange, onCreated }: Props) {
                 autoComplete="off"
               />
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="new-user-email">Email</Label>
               <Input
@@ -216,26 +264,41 @@ export function UsersHeader({ onFiltersChange, onCreated }: Props) {
                 autoComplete="off"
               />
             </div>
+
             <div className="space-y-2">
               <Label>Role</Label>
-              <Select value={newRole} onValueChange={(v) => setNewRole(v as Role)}>
+              <Select
+                value={newRole}
+                onValueChange={(v) => setNewRole(v as Role)}
+              >
                 <SelectTrigger className="bg-card w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Researcher">Researcher</SelectItem>
                   <SelectItem value="Lab Manager">Lab Manager</SelectItem>
-                  <SelectItem value="Financial Admin">Financial Admin</SelectItem>
+                  <SelectItem value="Financial Admin">
+                    Financial Admin
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={submitting}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setOpen(false)}
+              disabled={submitting}
+            >
               Cancel
             </Button>
-            <Button type="button" onClick={handleCreate} disabled={submitting || !canCreate || !userId}>
+            <Button
+              type="button"
+              onClick={handleCreate}
+              disabled={submitting || !canCreate || !userId}
+            >
               {submitting ? "Saving…" : "Create member"}
             </Button>
           </DialogFooter>

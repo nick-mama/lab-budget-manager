@@ -211,4 +211,46 @@ router.delete("/:id", requireRole(["Financial Admin"]), async (req, res) => {
   }
 });
 
+// create user
+router.post("/", requireRole(["Financial Admin"]), async (req, res) => {
+  try {
+    const { name, email, role } = req.body;
+
+    if (!name || !email || !role) {
+      return res.status(400).json({
+        error: "name, email, and role are required",
+      });
+    }
+
+    const existing = await get("SELECT id FROM users WHERE email = ?", [email]);
+    if (existing) {
+      return res.status(400).json({ error: "email already exists" });
+    }
+
+    const avatar = String(name)
+      .trim()
+      .split(/\s+/)
+      .map((part) => part[0] || "")
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+
+    const result = await run(
+      `
+      INSERT INTO users (name, email, role, avatar)
+      VALUES (?, ?, ?, ?)
+      `,
+      [name.trim(), email.trim(), role, avatar || "U"],
+    );
+
+    const createdUser = await get("SELECT * FROM users WHERE id = ?", [
+      result.lastInsertRowid,
+    ]);
+
+    res.status(201).json(createdUser);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

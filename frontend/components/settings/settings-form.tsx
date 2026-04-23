@@ -269,9 +269,11 @@ export function SettingsForm() {
 
       <Card className="bg-card">
         <CardHeader>
-          <CardTitle className="text-foreground">Security</CardTitle>
+          <CardTitle className="text-foreground">
+            Security <i>(Demo only. Not functional.)</i>
+          </CardTitle>
           <CardDescription>
-            Manage your account security settings.
+            Manage your account security settings.{" "}
           </CardDescription>
         </CardHeader>
 
@@ -286,6 +288,7 @@ export function SettingsForm() {
                 type="password"
                 className="bg-secondary"
                 value={currentPassword}
+                disabled
                 onChange={(e) => setCurrentPassword(e.target.value)}
               />
             </div>
@@ -299,6 +302,7 @@ export function SettingsForm() {
                 type="password"
                 className="bg-secondary"
                 value={newPassword}
+                disabled
                 onChange={(e) => setNewPassword(e.target.value)}
               />
             </div>
@@ -312,6 +316,7 @@ export function SettingsForm() {
                 type="password"
                 className="bg-secondary"
                 value={confirmPassword}
+                disabled
                 onChange={(e) => setConfirmPassword(e.target.value)}
               />
             </div>

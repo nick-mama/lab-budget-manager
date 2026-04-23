@@ -1,5 +1,6 @@
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { UserRoleEditor } from "@/components/users/user-role-editor";
 
 function getInitials(name: string) {
   return name
@@ -92,6 +93,20 @@ export default async function UserProfilePage({
           </CardContent>
         </Card>
       </div>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Role Management</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <UserRoleEditor
+            userId={user.id}
+            name={user.name}
+            email={user.email}
+            currentRole={user.role}
+          />
+        </CardContent>
+      </Card>
 
       <Card className="mt-6">
         <CardHeader>
