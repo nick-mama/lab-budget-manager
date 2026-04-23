@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useCurrentUserStore } from "@/lib/current-user-store";
+import { useCurrentUser } from "@/hooks/use-current-user";
 
 type UserRecord = {
   id: number;
@@ -30,6 +31,7 @@ type UserRecord = {
 
 export function SettingsForm() {
   const { userId } = useCurrentUserStore();
+  const { user: actingUser } = useCurrentUser();
 
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -57,7 +59,7 @@ export function SettingsForm() {
 
         const res = await fetch("http://localhost:4000/api/users", {
           headers: {
-            "x-user-id": "5",
+            "x-user-id": actingUser ? String(actingUser.id) : "5",
           },
         });
 
@@ -99,12 +101,14 @@ export function SettingsForm() {
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, actingUser]);
 
   const profileDisabled = useMemo(
     () => loadingProfile || savingProfile || !userId,
     [loadingProfile, savingProfile, userId],
   );
+
+  const isFinancialAdmin = actingUser?.role === "Financial Admin";
 
   async function handleSaveProfile(e: React.FormEvent) {
     e.preventDefault();
@@ -131,7 +135,7 @@ export function SettingsForm() {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          "x-user-id": "5",
+          "x-user-id": actingUser ? String(actingUser.id) : "5",
         },
         body: JSON.stringify({
           firstName: firstName.trim(),
@@ -229,22 +233,27 @@ export function SettingsForm() {
               <Label htmlFor="role" className="text-foreground">
                 Role
               </Label>
-              <Select
-                value={role}
-                onValueChange={setRole}
-                disabled={profileDisabled}
-              >
-                <SelectTrigger className="bg-secondary">
-                  <SelectValue placeholder="Select a role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Researcher">Researcher</SelectItem>
-                  <SelectItem value="Lab Manager">Lab Manager</SelectItem>
-                  <SelectItem value="Financial Admin">
-                    Financial Admin
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+
+              {isFinancialAdmin ? (
+                <Select
+                  value={role}
+                  onValueChange={setRole}
+                  disabled={profileDisabled}
+                >
+                  <SelectTrigger className="bg-secondary">
+                    <SelectValue placeholder="Select a role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Researcher">Researcher</SelectItem>
+                    <SelectItem value="Lab Manager">Lab Manager</SelectItem>
+                    <SelectItem value="Financial Admin">
+                      Financial Admin
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input value={role} disabled className="bg-secondary" />
+              )}
             </div>
 
             <Button

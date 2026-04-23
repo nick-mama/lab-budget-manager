@@ -21,6 +21,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ApiProject } from "@/components/projects/projects-view";
+import { useCurrentUser } from "@/hooks/use-current-user";
+import {
+  canDeleteProject,
+  canEditProject,
+  canViewProject,
+} from "@/lib/permissions";
 
 function formatUsd(n: number) {
   return new Intl.NumberFormat("en-US", {
@@ -49,6 +55,7 @@ export function ProjectsTable({
   loading,
 }: ProjectsTableProps) {
   const router = useRouter();
+  const { user: currentUser } = useCurrentUser();
 
   async function handleDelete(projectId: number) {
     const confirmed = window.confirm("Delete this project?");
@@ -59,12 +66,8 @@ export function ProjectsTable({
         `http://localhost:4000/api/projects/${projectId}`,
         {
           method: "DELETE",
-          // In a real app, you'd get the user ID from auth context or cookies
           headers: {
-            // to test if working, change this ID to 5 to delete any project (Financial Admin ID)
-            // Ex: "x-user-id": "5",
-            // Any other user ID will only be able to delete projects they manage
-            "x-user-id": "5",
+            "x-user-id": currentUser ? String(currentUser.id) : "5",
           },
         },
       );
@@ -115,6 +118,7 @@ export function ProjectsTable({
               </TableHead>
             </TableRow>
           </TableHeader>
+
           <TableBody>
             {projects.length === 0 ? (
               <TableRow>
@@ -152,6 +156,7 @@ export function ProjectsTable({
                   <TableCell>
                     <StatusBadge status={normalizeStatus(project.status)} />
                   </TableCell>
+
                   <TableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -161,29 +166,37 @@ export function ProjectsTable({
                       </DropdownMenuTrigger>
 
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={() => router.push(`/projects/${project.id}`)}
-                        >
-                          <Eye className="mr-2 h-4 w-4" />
-                          View
-                        </DropdownMenuItem>
+                        {canViewProject(currentUser) && (
+                          <DropdownMenuItem
+                            onClick={() =>
+                              router.push(`/projects/${project.id}`)
+                            }
+                          >
+                            <Eye className="mr-2 h-4 w-4" />
+                            View
+                          </DropdownMenuItem>
+                        )}
 
-                        <DropdownMenuItem
-                          onClick={() =>
-                            router.push(`/projects/${project.id}/edit`)
-                          }
-                        >
-                          <Pencil className="mr-2 h-4 w-4" />
-                          Edit
-                        </DropdownMenuItem>
+                        {canEditProject(currentUser, project) && (
+                          <DropdownMenuItem
+                            onClick={() =>
+                              router.push(`/projects/${project.id}/edit`)
+                            }
+                          >
+                            <Pencil className="mr-2 h-4 w-4" />
+                            Edit
+                          </DropdownMenuItem>
+                        )}
 
-                        <DropdownMenuItem
-                          onClick={() => handleDelete(project.id)}
-                          className="text-red-600 focus:text-red-600"
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Delete
-                        </DropdownMenuItem>
+                        {canDeleteProject(currentUser, project) && (
+                          <DropdownMenuItem
+                            onClick={() => handleDelete(project.id)}
+                            className="text-red-600 focus:text-red-600"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>

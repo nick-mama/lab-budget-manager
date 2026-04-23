@@ -11,12 +11,19 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useCurrentUser } from "@/hooks/use-current-user";
+import {
+  canDeleteProject,
+  canEditProject,
+  canViewProject,
+} from "@/lib/permissions";
 
 type BudgetRecord = {
   id: number;
   project_id: number;
   project_name: string;
   project_code: string;
+  manager_id: number;
   total_allocated_amount: number;
   remaining_balance: number;
   spent: number;
@@ -41,6 +48,8 @@ function getStatusText(percentage: number): { text: string; color: string } {
 
 export function BudgetCards() {
   const router = useRouter();
+  const { user: currentUser } = useCurrentUser();
+
   const [budgets, setBudgets] = useState<BudgetRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -49,7 +58,7 @@ export function BudgetCards() {
       try {
         const res = await fetch("http://localhost:4000/api/budgets", {
           headers: {
-            "x-user-id": "5",
+            "x-user-id": currentUser ? String(currentUser.id) : "5",
           },
         });
 
@@ -68,7 +77,7 @@ export function BudgetCards() {
     }
 
     loadBudgets();
-  }, []);
+  }, [currentUser]);
 
   async function handleDelete(projectId: number) {
     const confirmed = window.confirm("Delete this project?");
@@ -80,7 +89,7 @@ export function BudgetCards() {
         {
           method: "DELETE",
           headers: {
-            "x-user-id": "5",
+            "x-user-id": currentUser ? String(currentUser.id) : "5",
           },
         },
       );
@@ -145,31 +154,43 @@ export function BudgetCards() {
                   </DropdownMenuTrigger>
 
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      onClick={() =>
-                        router.push(`/projects/${budget.project_id}`)
-                      }
-                    >
-                      <Eye className="mr-2 h-4 w-4" />
-                      View Project
-                    </DropdownMenuItem>
+                    {canViewProject(currentUser) && (
+                      <DropdownMenuItem
+                        onClick={() =>
+                          router.push(`/projects/${budget.project_id}`)
+                        }
+                      >
+                        <Eye className="mr-2 h-4 w-4" />
+                        View Project
+                      </DropdownMenuItem>
+                    )}
 
-                    <DropdownMenuItem
-                      onClick={() =>
-                        router.push(`/projects/${budget.project_id}/edit`)
-                      }
-                    >
-                      <Pencil className="mr-2 h-4 w-4" />
-                      Edit Project
-                    </DropdownMenuItem>
+                    {canEditProject(currentUser, {
+                      id: budget.project_id,
+                      manager_id: budget.manager_id,
+                    }) && (
+                      <DropdownMenuItem
+                        onClick={() =>
+                          router.push(`/projects/${budget.project_id}/edit`)
+                        }
+                      >
+                        <Pencil className="mr-2 h-4 w-4" />
+                        Edit Project
+                      </DropdownMenuItem>
+                    )}
 
-                    <DropdownMenuItem
-                      onClick={() => handleDelete(budget.project_id)}
-                      className="text-red-600 focus:text-red-600"
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Delete Project
-                    </DropdownMenuItem>
+                    {canDeleteProject(currentUser, {
+                      id: budget.project_id,
+                      manager_id: budget.manager_id,
+                    }) && (
+                      <DropdownMenuItem
+                        onClick={() => handleDelete(budget.project_id)}
+                        className="text-red-600 focus:text-red-600"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete Project
+                      </DropdownMenuItem>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>

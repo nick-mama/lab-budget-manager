@@ -13,6 +13,7 @@ router.get("/", async (req, res) => {
         (b.total_allocated_amount - b.remaining_balance) AS spent,
         p.name AS project_name,
         p.project_code,
+        p.manager_id,
         COALESCE(c.line_item_count, 0) AS line_item_count
       FROM budgets b
       JOIN projects p ON p.id = b.project_id
