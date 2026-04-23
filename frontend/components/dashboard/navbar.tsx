@@ -119,31 +119,6 @@ export function Navbar({ title, subtitle }: NavbarProps) {
             className="w-64 bg-secondary pl-9"
           />
         </div>
-
-        <div className="relative">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="relative"
-            onClick={() => setShowNotifications(!showNotifications)}
-          >
-            <Bell className="h-5 w-5 text-muted-foreground" />
-            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-accent" />
-          </Button>
-
-          {showNotifications && (
-            <div className="absolute right-0 top-12 w-72 rounded-lg border border-border bg-card p-4 shadow-md">
-              <h3 className="mb-2 text-sm font-semibold text-foreground">
-                Notifications
-              </h3>
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <p>New budget request submitted.</p>
-                <p>1 line item is awaiting review.</p>
-                <p>Quarterly budget summary is ready.</p>
-              </div>
-            </div>
-          )}
-        </div>
       </div>
     </header>
   );
