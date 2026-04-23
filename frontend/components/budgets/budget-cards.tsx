@@ -141,7 +141,12 @@ export function BudgetCards() {
                   {budget.project_name}
                 </CardTitle>
                 <p className="mt-1 text-sm text-accent">
-                  {budget.project_code}
+                  <button
+                    onClick={() => router.push(`/projects/${budget.id}`)}
+                    className="hover:underline cursor-pointer"
+                  >
+                    {budget.project_code}
+                  </button>
                 </p>
               </div>
 

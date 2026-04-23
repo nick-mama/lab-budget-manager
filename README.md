@@ -247,6 +247,8 @@ From the repo root:
 npm run install:all
 ```
 
+Note: After initial installation, `npm run reinstall` can be used to refresh packages.
+
 ### 4) Start the server
 
 From the repo root:
