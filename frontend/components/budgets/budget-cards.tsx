@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Eye, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
@@ -11,36 +12,18 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-// Sample budget data
-const budgets = [
-  {
-    id: "BDG-001",
-    project: "Biotech Lab Development",
-    projectId: 1,
-    allocated: 200000,
-    spent: 145000,
-    remaining: 55000,
-    lineItems: 38,
-  },
-  {
-    id: "BDG-002",
-    project: "AI Research Initiative",
-    projectId: 4,
-    allocated: 180000,
-    spent: 156000,
-    remaining: 24000,
-    lineItems: 45,
-  },
-  {
-    id: "BDG-003",
-    project: "Neural Networks Study",
-    projectId: 3,
-    allocated: 85000,
-    spent: 85000,
-    remaining: 0,
-    lineItems: 31,
-  },
-];
+type BudgetProject = {
+  id: number;
+  project_code: string;
+  name: string;
+  budget: number;
+  spent: number;
+  line_item_count: number;
+};
+
+function formatUsd(n: number) {
+  return `$${Number(n || 0).toLocaleString()}`;
+}
 
 function getProgressColor(percentage: number): string {
   if (percentage >= 90) return "bg-[#D32F2F]";
@@ -56,6 +39,34 @@ function getStatusText(percentage: number): { text: string; color: string } {
 
 export function BudgetCards() {
   const router = useRouter();
+  const [budgets, setBudgets] = useState<BudgetProject[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadBudgets() {
+      try {
+        const res = await fetch("http://localhost:4000/api/projects", {
+          headers: {
+            "x-user-id": "5",
+          },
+        });
+
+        if (!res.ok) {
+          throw new Error("Failed to load projects");
+        }
+
+        const data = await res.json();
+        setBudgets(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error(error);
+        setBudgets([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadBudgets();
+  }, []);
 
   async function handleDelete(projectId: number) {
     const confirmed = window.confirm("Delete this project?");
@@ -76,16 +87,35 @@ export function BudgetCards() {
         throw new Error("Delete failed");
       }
 
-      router.refresh();
+      setBudgets((prev) => prev.filter((budget) => budget.id !== projectId));
     } catch (error) {
       console.error(error);
       alert("Delete failed");
     }
   }
+
+  if (loading) {
+    return <p className="text-sm text-muted-foreground">Loading budgets...</p>;
+  }
+
+  if (budgets.length === 0) {
+    return (
+      <div className="rounded-lg border bg-card p-6">
+        <p className="text-sm text-muted-foreground">No projects found.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-      {budgets.map((budget) => {
-        const percentage = Math.round((budget.spent / budget.allocated) * 100);
+      {budgets.map((budget, index) => {
+        const allocated = Number(budget.budget || 0);
+        const spent = Number(budget.spent || 0);
+        const remaining = allocated - spent;
+        const percentage =
+          allocated > 0
+            ? Math.min(Math.round((spent / allocated) * 100), 100)
+            : 0;
         const status = getStatusText(percentage);
 
         return (
@@ -93,10 +123,13 @@ export function BudgetCards() {
             <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
               <div>
                 <CardTitle className="text-base font-semibold text-foreground">
-                  {budget.project}
+                  {budget.name}
                 </CardTitle>
-                <p className="mt-1 text-sm text-accent">{budget.id}</p>
+                <p className="mt-1 text-sm text-accent">
+                  {`BDG-${String(index + 1).padStart(3, "0")}`}
+                </p>
               </div>
+
               <div className="flex items-center">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -107,25 +140,21 @@ export function BudgetCards() {
 
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem
-                      onClick={() =>
-                        router.push(`/projects/${budget.projectId}`)
-                      }
+                      onClick={() => router.push(`/projects/${budget.id}`)}
                     >
                       <Eye className="mr-2 h-4 w-4" />
                       View Project
                     </DropdownMenuItem>
 
                     <DropdownMenuItem
-                      onClick={() =>
-                        router.push(`/projects/${budget.projectId}/edit`)
-                      }
+                      onClick={() => router.push(`/projects/${budget.id}/edit`)}
                     >
                       <Pencil className="mr-2 h-4 w-4" />
                       Edit Project
                     </DropdownMenuItem>
 
                     <DropdownMenuItem
-                      onClick={() => handleDelete(budget.projectId)}
+                      onClick={() => handleDelete(budget.id)}
                       className="text-red-600 focus:text-red-600"
                     >
                       <Trash2 className="mr-2 h-4 w-4" />
@@ -135,9 +164,9 @@ export function BudgetCards() {
                 </DropdownMenu>
               </div>
             </CardHeader>
+
             <CardContent>
               <div className="space-y-4">
-                {/* Progress */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">
@@ -145,40 +174,43 @@ export function BudgetCards() {
                     </span>
                     <span className={status.color}>{status.text}</span>
                   </div>
+
                   <div className="relative h-2 w-full overflow-hidden rounded-full bg-secondary">
                     <div
                       className={`h-full transition-all ${getProgressColor(percentage)}`}
                       style={{ width: `${percentage}%` }}
                     />
                   </div>
+
                   <div className="flex items-center justify-between text-sm">
                     <span className="font-medium text-foreground">
                       {percentage}% used
                     </span>
                     <span className="text-muted-foreground">
-                      {budget.lineItems} line items
+                      {budget.line_item_count ?? 0} line items
                     </span>
                   </div>
                 </div>
 
-                {/* Financial Summary */}
                 <div className="space-y-2 rounded-lg bg-secondary p-3">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Allocated</span>
                     <span className="font-medium text-foreground">
-                      ${budget.allocated.toLocaleString()}
+                      {formatUsd(allocated)}
                     </span>
                   </div>
+
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Spent</span>
                     <span className="font-medium text-foreground">
-                      ${budget.spent.toLocaleString()}
+                      {formatUsd(spent)}
                     </span>
                   </div>
+
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Remaining</span>
                     <span className="font-medium text-[#2E7D32]">
-                      ${budget.remaining.toLocaleString()}
+                      {formatUsd(remaining)}
                     </span>
                   </div>
                 </div>

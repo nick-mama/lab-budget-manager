@@ -20,13 +20,16 @@ router.get("/", async (req, res) => {
       params.push(role);
     }
 
-    query += " GROUP BY u.id, u.name, u.email, u.role, u.avatar, u.created_at ORDER BY u.name ASC";
+    query +=
+      " GROUP BY u.id, u.name, u.email, u.role, u.avatar, u.created_at ORDER BY u.name ASC";
 
     const users = await all(query, params);
 
     const result = users.map((user) => ({
       ...user,
-      projects: user.project_names ? user.project_names.split("||") : ["No Projects"],
+      projects: user.project_names
+        ? user.project_names.split("||")
+        : ["No Projects"],
       project_names: undefined,
     }));
 
@@ -52,7 +55,9 @@ router.post("/", requireRole("Financial Admin"), async (req, res) => {
   try {
     const { name, email, role } = req.body;
     if (!name || !email || !role) {
-      return res.status(400).json({ error: "name, email, and role are required" });
+      return res
+        .status(400)
+        .json({ error: "name, email, and role are required" });
     }
 
     const parts = name.trim().split(" ");
@@ -63,10 +68,12 @@ router.post("/", requireRole("Financial Admin"), async (req, res) => {
 
     const result = await run(
       "INSERT INTO users (name, email, role, avatar) VALUES (?, ?, ?, ?)",
-      [name, email, role, avatar]
+      [name, email, role, avatar],
     );
 
-    const user = await get("SELECT * FROM users WHERE id = ?", [result.lastInsertRowid]);
+    const user = await get("SELECT * FROM users WHERE id = ?", [
+      result.lastInsertRowid,
+    ]);
     res.status(201).json(user);
   } catch (err) {
     if (err.code === "ER_DUP_ENTRY") {
@@ -91,7 +98,9 @@ router.put("/:id", requireRole("Financial Admin"), async (req, res) => {
       req.params.id,
     ]);
 
-    const updated = await get("SELECT * FROM users WHERE id = ?", [req.params.id]);
+    const updated = await get("SELECT * FROM users WHERE id = ?", [
+      req.params.id,
+    ]);
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -106,6 +115,42 @@ router.delete("/:id", requireRole("Financial Admin"), async (req, res) => {
 
     await run("DELETE FROM users WHERE id = ?", [req.params.id]);
     res.json({ message: "user deleted" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// update a user with separate firstName and lastName fields
+router.put("/:id", async (req, res) => {
+  try {
+    const { firstName, lastName, email, role } = req.body;
+
+    if (!firstName || !lastName || !email || !role) {
+      return res.status(400).json({
+        error: "firstName, lastName, email, and role are required",
+      });
+    }
+
+    const fullName = `${firstName} ${lastName}`.trim();
+
+    await run(
+      `
+      UPDATE users
+      SET name = ?, email = ?, role = ?
+      WHERE id = ?
+      `,
+      [fullName, email, role, req.params.id],
+    );
+
+    const updatedUser = await get("SELECT * FROM users WHERE id = ?", [
+      req.params.id,
+    ]);
+
+    if (!updatedUser) {
+      return res.status(404).json({ error: "user not found" });
+    }
+
+    res.json(updatedUser);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
