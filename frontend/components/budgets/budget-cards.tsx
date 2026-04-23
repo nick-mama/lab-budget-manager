@@ -124,7 +124,9 @@ export function BudgetCards() {
       {budgets.map((budget) => {
         const allocated = Number(budget.total_allocated_amount || 0);
         const remaining = Number(budget.remaining_balance || 0);
-        const spent = Math.max(0, allocated - remaining);
+
+        // Use backend-calculated spent directly
+        const spent = Math.max(0, Number(budget.spent || 0));
 
         const percentage =
           allocated > 0
@@ -142,8 +144,10 @@ export function BudgetCards() {
                 </CardTitle>
                 <p className="mt-1 text-sm text-accent">
                   <button
-                    onClick={() => router.push(`/projects/${budget.id}`)}
-                    className="hover:underline cursor-pointer"
+                    onClick={() =>
+                      router.push(`/projects/${budget.project_id}`)
+                    }
+                    className="cursor-pointer hover:underline"
                   >
                     {budget.project_code}
                   </button>
@@ -206,7 +210,7 @@ export function BudgetCards() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">
-                      Budget Utilization
+                      Approved Spending
                     </span>
                     <span className={status.color}>{status.text}</span>
                   </div>
@@ -237,15 +241,23 @@ export function BudgetCards() {
                   </div>
 
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Spent</span>
+                    <span className="text-muted-foreground">
+                      Spent (approved)
+                    </span>
                     <span className="font-medium text-foreground">
                       {formatUsd(spent)}
                     </span>
                   </div>
 
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Remaining</span>
-                    <span className="font-medium text-[#2E7D32]">
+                    <span className="text-muted-foreground">
+                      Remaining balance
+                    </span>
+                    <span
+                      className={`font-medium ${
+                        remaining < 0 ? "text-[#D32F2F]" : "text-[#2E7D32]"
+                      }`}
+                    >
                       {formatUsd(remaining)}
                     </span>
                   </div>

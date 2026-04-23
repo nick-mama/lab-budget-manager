@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, DollarSign, PiggyBank } from "lucide-react";
+import { useCurrentUser } from "@/hooks/use-current-user";
 
 type ChangeType = "positive" | "neutral" | "negative";
 
@@ -31,6 +32,8 @@ function formatUsd(n: number) {
 }
 
 export function BudgetSummary() {
+  const { user: currentUser } = useCurrentUser();
+
   const [totals, setTotals] = useState({
     allocated: 0,
     spent: 0,
@@ -46,10 +49,14 @@ export function BudgetSummary() {
       try {
         const [budgetsRes, lineItemsRes] = await Promise.all([
           fetch("http://localhost:4000/api/budgets", {
-            headers: { "x-user-id": "5" },
+            headers: {
+              "x-user-id": currentUser ? String(currentUser.id) : "5",
+            },
           }),
           fetch("http://localhost:4000/api/line-items", {
-            headers: { "x-user-id": "5" },
+            headers: {
+              "x-user-id": currentUser ? String(currentUser.id) : "5",
+            },
           }),
         ]);
 
@@ -71,11 +78,9 @@ export function BudgetSummary() {
           0,
         );
 
+        // Use backend-calculated spent directly
         const spent = budgets.reduce(
-          (sum, budget) =>
-            sum +
-            (Number(budget.total_allocated_amount || 0) -
-              Number(budget.remaining_balance || 0)),
+          (sum, budget) => sum + Math.max(0, Number(budget.spent || 0)),
           0,
         );
 
@@ -107,27 +112,30 @@ export function BudgetSummary() {
     }
 
     loadSummary();
-  }, []);
+  }, [currentUser]);
 
   const summaryItems: SummaryItem[] = [
     {
       title: "Total Allocated",
       value: formatUsd(totals.allocated),
-      change: `${totals.allocated > 0 ? "+" : ""}0%`,
+      change: "Original budgets",
       changeType: "positive",
       icon: DollarSign,
     },
     {
       title: "Total Spent",
       value: formatUsd(totals.spent),
-      change: `${totals.utilization.toFixed(1)}% utilized`,
+      change: `${totals.utilization.toFixed(1)}% of allocated`,
       changeType: totals.utilization >= 90 ? "negative" : "neutral",
       icon: TrendingUp,
     },
     {
       title: "Remaining Balance",
       value: formatUsd(totals.remaining),
-      change: `${totals.remainingPercent.toFixed(1)}% available`,
+      change:
+        totals.remaining >= 0
+          ? `${totals.remainingPercent.toFixed(1)}% available`
+          : `${Math.abs(totals.remainingPercent).toFixed(1)}% over budget`,
       changeType: totals.remaining < 0 ? "negative" : "positive",
       icon: PiggyBank,
     },
