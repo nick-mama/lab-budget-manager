@@ -4,6 +4,13 @@ import { StatusBadge } from "@/components/dashboard/status-badge";
 
 type ProjectStatus = "active" | "completed" | "closed";
 
+type Researcher = {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+};
+
 function normalizeStatus(s: string): ProjectStatus {
   if (s === "completed" || s === "closed") return s;
   return "active";
@@ -131,6 +138,35 @@ export default async function ProjectDetailsPage({
           </CardContent>
         </Card>
       </div>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Researchers</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!project.researchers || project.researchers.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No researchers assigned to this project.
+            </p>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {project.researchers.map((researcher: Researcher) => (
+                <div key={researcher.id} className="rounded-lg border p-4">
+                  <p className="font-medium text-foreground">
+                    {researcher.name}
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {researcher.email}
+                  </p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {researcher.role}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="mt-6">
         <CardHeader>
