@@ -6,9 +6,9 @@ import { TrendingUp, TrendingDown, DollarSign, PiggyBank } from "lucide-react";
 
 type ChangeType = "positive" | "neutral" | "negative";
 
-type BudgetProject = {
-  id: number;
-  budget: number;
+type BudgetRecord = {
+  total_allocated_amount: number;
+  remaining_balance: number;
   spent: number;
 };
 
@@ -44,8 +44,8 @@ export function BudgetSummary() {
   useEffect(() => {
     async function loadSummary() {
       try {
-        const [projectsRes, lineItemsRes] = await Promise.all([
-          fetch("http://localhost:4000/api/projects", {
+        const [budgetsRes, lineItemsRes] = await Promise.all([
+          fetch("http://localhost:4000/api/budgets", {
             headers: { "x-user-id": "5" },
           }),
           fetch("http://localhost:4000/api/line-items", {
@@ -53,25 +53,32 @@ export function BudgetSummary() {
           }),
         ]);
 
-        const projects: BudgetProject[] = projectsRes.ok
-          ? await projectsRes.json()
+        const budgets: BudgetRecord[] = budgetsRes.ok
+          ? await budgetsRes.json()
           : [];
 
         const lineItems: LineItem[] = lineItemsRes.ok
           ? await lineItemsRes.json()
           : [];
 
-        const allocated = projects.reduce(
-          (sum, project) => sum + Number(project.budget || 0),
+        const allocated = budgets.reduce(
+          (sum, budget) => sum + Number(budget.total_allocated_amount || 0),
           0,
         );
 
-        const spent = projects.reduce(
-          (sum, project) => sum + Number(project.spent || 0),
+        const remaining = budgets.reduce(
+          (sum, budget) => sum + Number(budget.remaining_balance || 0),
           0,
         );
 
-        const remaining = allocated - spent;
+        const spent = budgets.reduce(
+          (sum, budget) =>
+            sum +
+            (Number(budget.total_allocated_amount || 0) -
+              Number(budget.remaining_balance || 0)),
+          0,
+        );
+
         const utilization = allocated > 0 ? (spent / allocated) * 100 : 0;
         const remainingPercent =
           allocated > 0 ? (remaining / allocated) * 100 : 0;

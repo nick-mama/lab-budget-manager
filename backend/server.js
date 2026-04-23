@@ -7,6 +7,7 @@ const usersRouter = require("./routes/users");
 const projectsRouter = require("./routes/projects");
 const lineItemsRouter = require("./routes/lineItems");
 const dashboardRouter = require("./routes/dashboard");
+const budgetsRouter = require("./routes/budgets");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -15,7 +16,12 @@ const corsOptions = {
   origin: "http://localhost:3000",
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "x-user-id", "x-requested-with"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "x-user-id",
+    "x-requested-with",
+  ],
 };
 
 app.use(cors(corsOptions));
@@ -28,16 +34,19 @@ app.use("/api/users", usersRouter);
 app.use("/api/projects", projectsRouter);
 app.use("/api/line-items", lineItemsRouter);
 app.use("/api/dashboard", dashboardRouter);
+app.use("/api/budgets", budgetsRouter);
 
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
-initDb().then(() => {
-  app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+initDb()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error("Failed to initialize database:", err);
+    process.exit(1);
   });
-}).catch((err) => {
-  console.error("Failed to initialize database:", err);
-  process.exit(1);
-});

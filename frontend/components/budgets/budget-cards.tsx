@@ -12,11 +12,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-type BudgetProject = {
+type BudgetRecord = {
   id: number;
+  project_id: number;
+  project_name: string;
   project_code: string;
-  name: string;
-  budget: number;
+  total_allocated_amount: number;
+  remaining_balance: number;
   spent: number;
   line_item_count: number;
 };
@@ -39,20 +41,20 @@ function getStatusText(percentage: number): { text: string; color: string } {
 
 export function BudgetCards() {
   const router = useRouter();
-  const [budgets, setBudgets] = useState<BudgetProject[]>([]);
+  const [budgets, setBudgets] = useState<BudgetRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadBudgets() {
       try {
-        const res = await fetch("http://localhost:4000/api/projects", {
+        const res = await fetch("http://localhost:4000/api/budgets", {
           headers: {
             "x-user-id": "5",
           },
         });
 
         if (!res.ok) {
-          throw new Error("Failed to load projects");
+          throw new Error("Failed to load budgets");
         }
 
         const data = await res.json();
@@ -87,7 +89,9 @@ export function BudgetCards() {
         throw new Error("Delete failed");
       }
 
-      setBudgets((prev) => prev.filter((budget) => budget.id !== projectId));
+      setBudgets((prev) =>
+        prev.filter((budget) => budget.project_id !== projectId),
+      );
     } catch (error) {
       console.error(error);
       alert("Delete failed");
@@ -101,21 +105,23 @@ export function BudgetCards() {
   if (budgets.length === 0) {
     return (
       <div className="rounded-lg border bg-card p-6">
-        <p className="text-sm text-muted-foreground">No projects found.</p>
+        <p className="text-sm text-muted-foreground">No budgets found.</p>
       </div>
     );
   }
 
   return (
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-      {budgets.map((budget, index) => {
-        const allocated = Number(budget.budget || 0);
-        const spent = Number(budget.spent || 0);
-        const remaining = allocated - spent;
+      {budgets.map((budget) => {
+        const allocated = Number(budget.total_allocated_amount || 0);
+        const remaining = Number(budget.remaining_balance || 0);
+        const spent = Math.max(0, allocated - remaining);
+
         const percentage =
           allocated > 0
-            ? Math.min(Math.round((spent / allocated) * 100), 100)
+            ? Math.min(Math.max(Math.round((spent / allocated) * 100), 0), 100)
             : 0;
+
         const status = getStatusText(percentage);
 
         return (
@@ -123,10 +129,10 @@ export function BudgetCards() {
             <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
               <div>
                 <CardTitle className="text-base font-semibold text-foreground">
-                  {budget.name}
+                  {budget.project_name}
                 </CardTitle>
                 <p className="mt-1 text-sm text-accent">
-                  {`BDG-${String(index + 1).padStart(3, "0")}`}
+                  {budget.project_code}
                 </p>
               </div>
 
@@ -140,21 +146,25 @@ export function BudgetCards() {
 
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem
-                      onClick={() => router.push(`/projects/${budget.id}`)}
+                      onClick={() =>
+                        router.push(`/projects/${budget.project_id}`)
+                      }
                     >
                       <Eye className="mr-2 h-4 w-4" />
                       View Project
                     </DropdownMenuItem>
 
                     <DropdownMenuItem
-                      onClick={() => router.push(`/projects/${budget.id}/edit`)}
+                      onClick={() =>
+                        router.push(`/projects/${budget.project_id}/edit`)
+                      }
                     >
                       <Pencil className="mr-2 h-4 w-4" />
                       Edit Project
                     </DropdownMenuItem>
 
                     <DropdownMenuItem
-                      onClick={() => handleDelete(budget.id)}
+                      onClick={() => handleDelete(budget.project_id)}
                       className="text-red-600 focus:text-red-600"
                     >
                       <Trash2 className="mr-2 h-4 w-4" />
