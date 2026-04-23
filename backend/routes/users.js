@@ -56,13 +56,9 @@ router.get("/:id", async (req, res) => {
         u.name,
         u.email,
         u.role,
-        u.avatar,
-        GROUP_CONCAT(DISTINCT p.name ORDER BY p.name SEPARATOR '||') AS project_names
+        u.avatar
       FROM users u
-      LEFT JOIN project_users pu ON pu.user_id = u.id
-      LEFT JOIN projects p ON p.id = pu.project_id
       WHERE u.id = ?
-      GROUP BY u.id, u.name, u.email, u.role, u.avatar
       `,
       [req.params.id],
     );
@@ -71,11 +67,38 @@ router.get("/:id", async (req, res) => {
       return res.status(404).json({ error: "user not found" });
     }
 
+    const managedProjects = await all(
+      `
+      SELECT
+        p.id,
+        p.name,
+        p.project_code
+      FROM projects p
+      WHERE p.manager_id = ?
+      ORDER BY p.name ASC
+      `,
+      [req.params.id],
+    );
+
+    const memberProjects = await all(
+      `
+      SELECT
+        p.id,
+        p.name,
+        p.project_code
+      FROM project_users pu
+      JOIN projects p ON p.id = pu.project_id
+      WHERE pu.user_id = ?
+        AND p.manager_id != ?
+      ORDER BY p.name ASC
+      `,
+      [req.params.id, req.params.id],
+    );
+
     res.json({
       ...user,
-      projects: user.project_names
-        ? String(user.project_names).split("||")
-        : [],
+      managed_projects: managedProjects,
+      member_projects: memberProjects,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

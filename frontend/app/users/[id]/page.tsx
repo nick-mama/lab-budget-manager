@@ -11,13 +11,20 @@ function getInitials(name: string) {
     .slice(0, 2);
 }
 
+type ProjectSummary = {
+  id: number;
+  name: string;
+  project_code: string;
+};
+
 type UserProfile = {
   id: number;
   name: string;
   email: string;
   role: string;
   avatar?: string;
-  projects?: string[];
+  managed_projects?: ProjectSummary[];
+  member_projects?: ProjectSummary[];
 };
 
 export default async function UserProfilePage({
@@ -88,18 +95,45 @@ export default async function UserProfilePage({
 
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle>Projects</CardTitle>
+          <CardTitle>Managed Projects</CardTitle>
         </CardHeader>
         <CardContent>
-          {!user.projects || user.projects.length === 0 ? (
+          {!user.managed_projects || user.managed_projects.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              This user is not assigned to any projects.
+              This user does not manage any projects.
             </p>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {user.projects.map((projectName) => (
-                <div key={projectName} className="rounded-lg border p-4">
-                  <p className="font-medium">{projectName}</p>
+              {user.managed_projects.map((project) => (
+                <div key={project.id} className="rounded-lg border p-4">
+                  <p className="font-medium">{project.name}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {project.project_code}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Project Membership</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!user.member_projects || user.member_projects.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              This user is not a member of any additional projects.
+            </p>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {user.member_projects.map((project) => (
+                <div key={project.id} className="rounded-lg border p-4">
+                  <p className="font-medium">{project.name}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {project.project_code}
+                  </p>
                 </div>
               ))}
             </div>
