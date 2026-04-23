@@ -1,12 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { useCurrentUser } from "@/hooks/use-current-user";
+
+type Researcher = {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+};
 
 type Project = {
   id: number;
@@ -15,13 +23,15 @@ type Project = {
   start_date: string;
   end_date: string;
   budget: number;
-  spent: number;
+  spent?: number;
   status: string;
+  researchers?: Researcher[];
 };
 
-type User = {
+type UserRecord = {
   id: number;
   name: string;
+  email: string;
   role: string;
 };
 
@@ -34,18 +44,11 @@ type FormErrors = {
   status?: string;
 };
 
-function formatUsd(n: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  }).format(n);
-}
-
 export default function EditProjectForm({ project }: { project: Project }) {
   const router = useRouter();
+  const { user: currentUser } = useCurrentUser();
 
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<UserRecord[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -58,6 +61,10 @@ export default function EditProjectForm({ project }: { project: Project }) {
     status: project.status,
   });
 
+  const [selectedResearchers, setSelectedResearchers] = useState<number[]>(
+    (project.researchers ?? []).map((r) => r.id),
+  );
+
   const [errors, setErrors] = useState<FormErrors>({});
 
   useEffect(() => {
@@ -65,7 +72,7 @@ export default function EditProjectForm({ project }: { project: Project }) {
       try {
         const res = await fetch("http://localhost:4000/api/users", {
           headers: {
-            "x-user-id": "5",
+            "x-user-id": currentUser ? String(currentUser.id) : "5",
           },
         });
 
@@ -74,15 +81,7 @@ export default function EditProjectForm({ project }: { project: Project }) {
         }
 
         const data = await res.json();
-
-        const managers = Array.isArray(data)
-          ? data.filter(
-              (user) =>
-                user.role === "Lab Manager" || user.role === "Financial Admin",
-            )
-          : [];
-
-        setUsers(managers);
+        setUsers(Array.isArray(data) ? data : []);
       } catch (error) {
         console.error(error);
       } finally {
@@ -91,7 +90,26 @@ export default function EditProjectForm({ project }: { project: Project }) {
     }
 
     loadUsers();
-  }, []);
+  }, [currentUser]);
+
+  const managers = useMemo(
+    () =>
+      users.filter(
+        (user) =>
+          user.role === "Lab Manager" || user.role === "Financial Admin",
+      ),
+    [users],
+  );
+
+  const researchers = useMemo(
+    () => users.filter((user) => user.role === "Researcher"),
+    [users],
+  );
+
+  const canManageResearchers =
+    currentUser?.role === "Financial Admin" ||
+    (currentUser?.role === "Lab Manager" &&
+      Number(project.manager_id) === Number(currentUser.id));
 
   function validateForm() {
     const newErrors: FormErrors = {};
@@ -128,6 +146,14 @@ export default function EditProjectForm({ project }: { project: Project }) {
     return Object.keys(newErrors).length === 0;
   }
 
+  function toggleResearcher(researcherId: number) {
+    setSelectedResearchers((prev) =>
+      prev.includes(researcherId)
+        ? prev.filter((id) => id !== researcherId)
+        : [...prev, researcherId],
+    );
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
@@ -142,9 +168,12 @@ export default function EditProjectForm({ project }: { project: Project }) {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
-            "x-user-id": "5",
+            "x-user-id": currentUser ? String(currentUser.id) : "5",
           },
-          body: JSON.stringify(form),
+          body: JSON.stringify({
+            ...form,
+            researcher_ids: selectedResearchers,
+          }),
         },
       );
 
@@ -168,7 +197,7 @@ export default function EditProjectForm({ project }: { project: Project }) {
   }
 
   return (
-    <Card className="max-w-2xl">
+    <Card className="max-w-3xl">
       <CardHeader>
         <CardTitle>Edit Project</CardTitle>
       </CardHeader>
@@ -199,7 +228,7 @@ export default function EditProjectForm({ project }: { project: Project }) {
               disabled={loadingUsers}
             >
               <option value="">Select a manager</option>
-              {users.map((user) => (
+              {managers.map((user) => (
                 <option key={user.id} value={user.id}>
                   {user.name} ({user.role})
                 </option>
@@ -240,7 +269,7 @@ export default function EditProjectForm({ project }: { project: Project }) {
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="budget">Budget</Label>
               <Input
@@ -255,16 +284,6 @@ export default function EditProjectForm({ project }: { project: Project }) {
               {errors.budget ? (
                 <p className="text-sm text-red-600">{errors.budget}</p>
               ) : null}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="spent">Budget Spent</Label>
-              <Input
-                id="spent"
-                value={formatUsd(Number(project.spent ?? 0))}
-                readOnly
-                disabled
-              />
             </div>
 
             <div className="space-y-2">
@@ -284,6 +303,43 @@ export default function EditProjectForm({ project }: { project: Project }) {
               ) : null}
             </div>
           </div>
+
+          {canManageResearchers ? (
+            <div className="space-y-3">
+              <Label>Assigned Researchers</Label>
+              {researchers.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No researchers available.
+                </p>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {researchers.map((researcher) => {
+                    const checked = selectedResearchers.includes(researcher.id);
+
+                    return (
+                      <label
+                        key={researcher.id}
+                        className="flex items-start gap-3 rounded-lg border p-3 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleResearcher(researcher.id)}
+                          className="mt-1"
+                        />
+                        <div>
+                          <p className="font-medium">{researcher.name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {researcher.email}
+                          </p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : null}
 
           <div className="flex gap-3 pt-2">
             <Button type="submit" disabled={saving}>

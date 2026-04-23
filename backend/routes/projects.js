@@ -149,8 +149,15 @@ router.post(
   requireRole(["Lab Manager", "Financial Admin"]),
   async (req, res) => {
     try {
-      const { name, manager_id, start_date, end_date, budget, status } =
-        req.body;
+      const {
+        name,
+        manager_id,
+        start_date,
+        end_date,
+        budget,
+        status,
+        researcher_ids,
+      } = req.body;
       if (
         !name ||
         !manager_id ||
@@ -239,8 +246,15 @@ router.put(
         return res.status(403).json({ error: "forbidden" });
       }
 
-      const { name, manager_id, start_date, end_date, budget, status } =
-        req.body;
+      const {
+        name,
+        manager_id,
+        start_date,
+        end_date,
+        budget,
+        status,
+        researcher_ids,
+      } = req.body;
 
       if (
         req.user.role === "Lab Manager" &&
@@ -283,11 +297,48 @@ router.put(
       const updated = await get("SELECT * FROM projects WHERE id = ?", [
         req.params.id,
       ]);
+
+      // Ensure manager is always part of the project
       await run(
         "INSERT IGNORE INTO project_users (project_id, user_id) VALUES (?, ?)",
         [req.params.id, updated.manager_id],
       );
-      res.json(updated);
+
+      // If researcher_ids were provided, replace current researcher assignments
+      if (Array.isArray(researcher_ids)) {
+        // Remove only researchers from this project; keep the manager membership
+        await run(
+          `
+    DELETE pu
+    FROM project_users pu
+    JOIN users u ON pu.user_id = u.id
+    WHERE pu.project_id = ?
+      AND u.role = 'Researcher'
+    `,
+          [req.params.id],
+        );
+
+        for (const researcherId of researcher_ids) {
+          await run(
+            "INSERT IGNORE INTO project_users (project_id, user_id) VALUES (?, ?)",
+            [req.params.id, researcherId],
+          );
+        }
+      }
+
+      const researchers = await all(
+        `
+  SELECT u.id, u.name, u.email, u.role
+  FROM project_users pu
+  JOIN users u ON pu.user_id = u.id
+  WHERE pu.project_id = ?
+    AND u.role = 'Researcher'
+  ORDER BY u.name ASC
+  `,
+        [req.params.id],
+      );
+
+      res.json({ ...updated, researchers });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
