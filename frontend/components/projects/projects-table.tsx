@@ -129,7 +129,12 @@ export function ProjectsTable({
               projects.map((project) => (
                 <TableRow key={project.id} className="border-border">
                   <TableCell className="text-accent font-medium">
-                    {project.project_code}
+                    <button
+                      onClick={() => router.push(`/projects/${project.id}`)}
+                      className="hover:underline cursor-pointer"
+                    >
+                      {project.project_code}
+                    </button>
                   </TableCell>
                   <TableCell className="text-foreground font-medium">
                     {project.name}

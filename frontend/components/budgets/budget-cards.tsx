@@ -132,7 +132,10 @@ export function BudgetCards() {
                   {budget.project_name}
                 </CardTitle>
                 <p className="mt-1 text-sm text-accent">
-                  {budget.project_code}
+                    <button
+                      onClick={() => router.push(`/projects/${budget.id}`)}
+                      className="hover:underline cursor-pointer"
+                    >{budget.project_code}</button>
                 </p>
               </div>
 
@@ -145,15 +148,6 @@ export function BudgetCards() {
                   </DropdownMenuTrigger>
 
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      onClick={() =>
-                        router.push(`/projects/${budget.project_id}`)
-                      }
-                    >
-                      <Eye className="mr-2 h-4 w-4" />
-                      View Project
-                    </DropdownMenuItem>
-
                     <DropdownMenuItem
                       onClick={() =>
                         router.push(`/projects/${budget.project_id}/edit`)
