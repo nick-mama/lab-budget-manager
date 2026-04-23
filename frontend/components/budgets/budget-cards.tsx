@@ -1,17 +1,22 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
-import { Eye, MoreHorizontal } from "lucide-react";
-import Link from "next/link";
+import { Eye, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 // Sample budget data
 const budgets = [
   {
     id: "BDG-001",
     project: "Biotech Lab Development",
-    projectId: "PRJ-002",
+    projectId: 1,
     allocated: 200000,
     spent: 145000,
     remaining: 55000,
@@ -19,8 +24,8 @@ const budgets = [
   },
   {
     id: "BDG-002",
-    project: "Quantum Computing Lab",
-    projectId: "PRJ-004",
+    project: "AI Research Initiative",
+    projectId: 4,
     allocated: 180000,
     spent: 156000,
     remaining: 24000,
@@ -29,7 +34,7 @@ const budgets = [
   {
     id: "BDG-003",
     project: "Neural Networks Study",
-    projectId: "PRJ-006",
+    projectId: 3,
     allocated: 85000,
     spent: 85000,
     remaining: 0,
@@ -50,6 +55,33 @@ function getStatusText(percentage: number): { text: string; color: string } {
 }
 
 export function BudgetCards() {
+  const router = useRouter();
+
+  async function handleDelete(projectId: number) {
+    const confirmed = window.confirm("Delete this project?");
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch(
+        `http://localhost:4000/api/projects/${projectId}`,
+        {
+          method: "DELETE",
+          headers: {
+            "x-user-id": "5",
+          },
+        },
+      );
+
+      if (!res.ok) {
+        throw new Error("Delete failed");
+      }
+
+      router.refresh();
+    } catch (error) {
+      console.error(error);
+      alert("Delete failed");
+    }
+  }
   return (
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
       {budgets.map((budget) => {
@@ -65,15 +97,42 @@ export function BudgetCards() {
                 </CardTitle>
                 <p className="mt-1 text-sm text-accent">{budget.id}</p>
               </div>
-              <div className="flex items-center gap-1">
-                <Link href={`/projects/${budget.projectId}`}>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <Eye className="h-4 w-4 text-muted-foreground" />
-                  </Button>
-                </Link>
-                <Button variant="ghost" size="icon" className="h-8 w-8">
-                  <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
-                </Button>
+              <div className="flex items-center">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                      <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
+                    </Button>
+                  </DropdownMenuTrigger>
+
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onClick={() =>
+                        router.push(`/projects/${budget.projectId}`)
+                      }
+                    >
+                      <Eye className="mr-2 h-4 w-4" />
+                      View Project
+                    </DropdownMenuItem>
+
+                    <DropdownMenuItem
+                      onClick={() =>
+                        router.push(`/projects/${budget.projectId}/edit`)
+                      }
+                    >
+                      <Pencil className="mr-2 h-4 w-4" />
+                      Edit Project
+                    </DropdownMenuItem>
+
+                    <DropdownMenuItem
+                      onClick={() => handleDelete(budget.projectId)}
+                      className="text-red-600 focus:text-red-600"
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete Project
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </CardHeader>
             <CardContent>
