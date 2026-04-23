@@ -46,8 +46,11 @@ export function UsersGrid({ filters, refreshKey }: Props) {
       setError(null);
       try {
         const params = new URLSearchParams();
-        if (filters?.role && filters.role !== "all") params.set("role", filters.role);
-        const res = await apiFetch(`/api/users${params.toString() ? `?${params.toString()}` : ""}`);
+        if (filters?.role && filters.role !== "all")
+          params.set("role", filters.role);
+        const res = await apiFetch(
+          `/api/users${params.toString() ? `?${params.toString()}` : ""}`,
+        );
         if (!res.ok) {
           const text = await res.text();
           throw new Error(text || res.statusText);
@@ -71,16 +74,21 @@ export function UsersGrid({ filters, refreshKey }: Props) {
   const filtered = React.useMemo(() => {
     const q = filters?.search?.trim().toLowerCase() ?? "";
     if (!q) return users;
-    return users.filter((u) =>
-      u.name?.toLowerCase().includes(q) ||
-      u.email?.toLowerCase().includes(q) ||
-      u.role?.toLowerCase().includes(q) ||
-      (Array.isArray(u.projects) ? u.projects.join(", ").toLowerCase().includes(q) : false)
+    return users.filter(
+      (u) =>
+        u.name?.toLowerCase().includes(q) ||
+        u.email?.toLowerCase().includes(q) ||
+        u.role?.toLowerCase().includes(q) ||
+        (Array.isArray(u.projects)
+          ? u.projects.join(", ").toLowerCase().includes(q)
+          : false),
     );
   }, [users, filters?.search]);
 
   if (loading) {
-    return <p className="text-muted-foreground text-sm">Loading team members…</p>;
+    return (
+      <p className="text-muted-foreground text-sm">Loading team members…</p>
+    );
   }
 
   if (error) {
@@ -95,58 +103,58 @@ export function UsersGrid({ filters, refreshKey }: Props) {
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {filtered.length === 0 ? (
         <p className="text-muted-foreground text-sm">No team members found.</p>
-      ) : filtered.map((user) => (
-        <Card key={user.id} className="bg-card">
-          <CardContent className="p-6">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
-                  {user.avatar ?? user.name?.slice(0, 2)?.toUpperCase()}
+      ) : (
+        filtered.map((user) => (
+          <Card key={user.id} className="bg-card">
+            <CardContent className="p-6">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
+                    {user.avatar ?? user.name?.slice(0, 2)?.toUpperCase()}
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-foreground">
+                      {user.name}
+                    </h3>
+                    <span
+                      className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${getRoleBadgeStyles(
+                        user.role,
+                      )}`}
+                    >
+                      {user.role}
+                    </span>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-semibold text-foreground">{user.name}</h3>
-                  <span
-                    className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${getRoleBadgeStyles(
-                      user.role,
-                    )}`}
-                  >
-                    {user.role}
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
+                </Button>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Mail className="h-4 w-4" />
+                  <span className="truncate">{user.email}</span>
+                </div>
+                <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                  <FolderKanban className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span className="line-clamp-2">
+                    {(Array.isArray(user.projects)
+                      ? user.projects
+                      : ["No Projects"]
+                    ).join(", ")}
                   </span>
                 </div>
               </div>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
-              </Button>
-            </div>
 
-            <div className="mt-4 space-y-3">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Mail className="h-4 w-4" />
-                <span className="truncate">{user.email}</span>
+              <div className="mt-4 flex gap-2">
+                <Button variant="outline" size="sm" className="flex-1">
+                  View Profile
+                </Button>
               </div>
-              <div className="flex items-start gap-2 text-sm text-muted-foreground">
-                <FolderKanban className="mt-0.5 h-4 w-4 shrink-0" />
-                <span className="line-clamp-2">
-                  {(Array.isArray(user.projects) ? user.projects : ["No Projects"]).join(", ")}
-                </span>
-              </div>
-            </div>
-
-            <div className="mt-4 flex gap-2">
-              <Button variant="outline" size="sm" className="flex-1">
-                View Profile
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-accent text-accent hover:bg-accent hover:text-accent-foreground"
-              >
-                Message
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+            </CardContent>
+          </Card>
+        ))
+      )}
     </div>
   );
 }
