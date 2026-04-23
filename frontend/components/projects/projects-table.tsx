@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/table";
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Eye, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
   DropdownMenu,
@@ -161,6 +161,13 @@ export function ProjectsTable({
                       </DropdownMenuTrigger>
 
                       <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={() => router.push(`/projects/${project.id}`)}
+                        >
+                          <Eye className="mr-2 h-4 w-4" />
+                          View
+                        </DropdownMenuItem>
+
                         <DropdownMenuItem
                           onClick={() =>
                             router.push(`/projects/${project.id}/edit`)
