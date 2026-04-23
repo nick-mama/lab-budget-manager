@@ -60,18 +60,23 @@ export function LineItemsHeader({ onFiltersChange, onCreated }: Props) {
     onFiltersChange?.({ search, status, type, project_id: projectId });
   }, [search, status, type, projectId, onFiltersChange]);
 
- // load projects on mount for both the filter dropdown and the modal
-React.useEffect(() => {
-  apiFetch("/api/projects")
-    .then((res) => res.json())
-    .then(setProjects)
-    .catch(console.error);
-// eslint-disable-next-line react-hooks/exhaustive-deps
-}, []);
+  // load projects on mount for both the filter dropdown and the modal
+  React.useEffect(() => {
+    apiFetch("/api/projects")
+      .then((res) => res.json())
+      .then(setProjects)
+      .catch(console.error);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleSubmit() {
     setError("");
-    if (!form.description || !form.project_id || !form.amount || !form.request_date) {
+    if (
+      !form.description ||
+      !form.project_id ||
+      !form.amount ||
+      !form.request_date
+    ) {
       setError("All fields are required.");
       return;
     }
@@ -157,10 +162,6 @@ React.useEffect(() => {
           </Select>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" className="gap-2">
-            <Download className="h-4 w-4" />
-            Export
-          </Button>
           <Button
             className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
             onClick={() => setOpen(true)}
@@ -182,7 +183,9 @@ React.useEffect(() => {
               <Input
                 placeholder="e.g. Lab supplies"
                 value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, description: e.target.value })
+                }
               />
             </div>
             <div className="flex flex-col gap-1">
@@ -232,7 +235,9 @@ React.useEffect(() => {
               <Input
                 type="date"
                 value={form.request_date}
-                onChange={(e) => setForm({ ...form, request_date: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, request_date: e.target.value })
+                }
               />
             </div>
             {error && <p className="text-sm text-red-500">{error}</p>}

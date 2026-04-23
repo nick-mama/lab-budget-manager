@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { useApi } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth";
+import { useCurrentUserStore } from "@/lib/current-user-store";
 
 interface NavbarProps {
   title: string;
@@ -21,10 +22,14 @@ interface NavbarProps {
 }
 
 export function Navbar({ title, subtitle }: NavbarProps) {
+  const { userId: selectedUserId, setUserId: setSelectedUserId } =
+    useCurrentUserStore();
   const [showNotifications, setShowNotifications] = useState(false);
   const { apiFetch, userId } = useApi();
   const { setUserId } = useAuth();
-  const [users, setUsers] = useState<Array<{ id: number; name: string; role: string }>>([]);
+  const [users, setUsers] = useState<
+    Array<{ id: number; name: string; role: string }>
+  >([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
 
   useEffect(() => {
@@ -34,7 +39,11 @@ export function Navbar({ title, subtitle }: NavbarProps) {
       try {
         const res = await apiFetch("/api/users");
         if (!res.ok) return;
-        const data = (await res.json()) as Array<{ id: number; name: string; role: string }>;
+        const data = (await res.json()) as Array<{
+          id: number;
+          name: string;
+          role: string;
+        }>;
         if (!cancelled && Array.isArray(data)) setUsers(data);
       } finally {
         if (!cancelled) setLoadingUsers(false);
@@ -59,14 +68,21 @@ export function Navbar({ title, subtitle }: NavbarProps) {
         <div className="block">
           <Label className="sr-only">Active user</Label>
           <Select
-            value={userId ? String(userId) : ""}
+            value={selectedUserId ? String(selectedUserId) : ""}
             onValueChange={(v) => {
               const n = Number(v);
-              setUserId(Number.isFinite(n) && n > 0 ? n : null);
+              const nextUserId = Number.isFinite(n) && n > 0 ? n : null;
+
+              setUserId(nextUserId);
+              if (nextUserId) {
+                setSelectedUserId(nextUserId);
+              }
             }}
           >
             <SelectTrigger className="w-[220px] bg-secondary">
-              <SelectValue placeholder={loadingUsers ? "Loading users…" : "Choose user"} />
+              <SelectValue
+                placeholder={loadingUsers ? "Loading users…" : "Choose user"}
+              />
             </SelectTrigger>
             <SelectContent>
               {users.map((u) => (

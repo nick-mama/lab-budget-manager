@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useCurrentUserStore } from "@/lib/current-user-store";
 import {
   LayoutDashboard,
   FolderKanban,
@@ -43,13 +44,18 @@ function getInitials(name: string) {
 
 export function Sidebar() {
   const pathname = usePathname();
-  const currentUserId = 5;
+  const { userId } = useCurrentUserStore();
 
-  const [user, setUser] = useState<UserRecord | null>(null);
+  const [users, setUsers] = useState<UserRecord[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
 
   useEffect(() => {
-    async function loadUser() {
+    let cancelled = false;
+
+    async function loadUsers() {
       try {
+        setLoadingUsers(true);
+
         const res = await fetch("http://localhost:4000/api/users", {
           headers: {
             "x-user-id": "5",
@@ -60,16 +66,31 @@ export function Sidebar() {
           throw new Error("Failed to load users");
         }
 
-        const users = (await res.json()) as UserRecord[];
-        const currentUser = users.find((u) => u.id === currentUserId) ?? null;
-        setUser(currentUser);
+        const data = (await res.json()) as UserRecord[];
+
+        if (!cancelled) {
+          setUsers(Array.isArray(data) ? data : []);
+        }
       } catch (error) {
         console.error(error);
+        if (!cancelled) {
+          setUsers([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingUsers(false);
+        }
       }
     }
 
-    loadUser();
+    loadUsers();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  const user = users.find((u) => u.id === userId) ?? null;
 
   return (
     <aside className="fixed inset-y-0 left-0 z-50 flex h-full w-64 flex-col bg-primary">
@@ -113,14 +134,16 @@ export function Sidebar() {
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-medium text-accent-foreground">
             {user ? getInitials(user.name) : "--"}
           </div>
+
           <div className="flex-1">
             <p className="text-sm font-medium text-primary-foreground">
-              {user?.name ?? "Loading..."}
+              {loadingUsers ? "Loading..." : (user?.name ?? "Unknown User")}
             </p>
             <p className="text-xs text-primary-foreground/70">
               {user?.role ?? ""}
             </p>
           </div>
+
           <button className="rounded-lg p-2 text-primary-foreground/70 hover:bg-primary-foreground/10 hover:text-primary-foreground">
             <LogOut className="h-4 w-4" />
           </button>

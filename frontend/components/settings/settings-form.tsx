@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { useCurrentUserStore } from "@/lib/current-user-store";
 
 type UserRecord = {
   id: number;
@@ -28,7 +29,7 @@ type UserRecord = {
 };
 
 export function SettingsForm() {
-  const currentUserId = 5; // In a real app, get this from auth context or similar
+  const { userId } = useCurrentUserStore();
 
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -43,9 +44,18 @@ export function SettingsForm() {
   const [confirmPassword, setConfirmPassword] = useState("");
 
   useEffect(() => {
+    let cancelled = false;
+
     async function loadUser() {
+      if (!userId) {
+        setLoadingProfile(false);
+        return;
+      }
+
       try {
-        const res = await fetch(`http://localhost:4000/api/users`, {
+        setLoadingProfile(true);
+
+        const res = await fetch("http://localhost:4000/api/users", {
           headers: {
             "x-user-id": "5",
           },
@@ -56,7 +66,7 @@ export function SettingsForm() {
         }
 
         const users = (await res.json()) as UserRecord[];
-        const currentUser = users.find((user) => user.id === currentUserId);
+        const currentUser = users.find((user) => user.id === userId);
 
         if (!currentUser) {
           throw new Error("User not found");
@@ -66,28 +76,43 @@ export function SettingsForm() {
         const first = parts[0] ?? "";
         const last = parts.slice(1).join(" ");
 
-        setFirstName(first);
-        setLastName(last);
-        setEmail(currentUser.email);
-        setRole(currentUser.role);
+        if (!cancelled) {
+          setFirstName(first);
+          setLastName(last);
+          setEmail(currentUser.email);
+          setRole(currentUser.role);
+        }
       } catch (error) {
         console.error(error);
-        toast.error("Failed to load profile");
+        if (!cancelled) {
+          toast.error("Failed to load profile");
+        }
       } finally {
-        setLoadingProfile(false);
+        if (!cancelled) {
+          setLoadingProfile(false);
+        }
       }
     }
 
     loadUser();
-  }, []);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   const profileDisabled = useMemo(
-    () => loadingProfile || savingProfile,
-    [loadingProfile, savingProfile],
+    () => loadingProfile || savingProfile || !userId,
+    [loadingProfile, savingProfile, userId],
   );
 
   async function handleSaveProfile(e: React.FormEvent) {
     e.preventDefault();
+
+    if (!userId) {
+      toast.error("No active user selected.");
+      return;
+    }
 
     if (
       !firstName.trim() ||
@@ -102,22 +127,19 @@ export function SettingsForm() {
     try {
       setSavingProfile(true);
 
-      const res = await fetch(
-        `http://localhost:4000/api/users/${currentUserId}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            "x-user-id": "5",
-          },
-          body: JSON.stringify({
-            firstName: firstName.trim(),
-            lastName: lastName.trim(),
-            email: email.trim(),
-            role,
-          }),
+      const res = await fetch(`http://localhost:4000/api/users/${userId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-id": "5",
         },
-      );
+        body: JSON.stringify({
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          email: email.trim(),
+          role,
+        }),
+      });
 
       if (!res.ok) {
         const text = await res.text();
