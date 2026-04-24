@@ -5,7 +5,6 @@ const { requireRole, requireUser } = require("../middleware/auth");
 const bcrypt = require("bcrypt");
 
 const SALT_ROUNDS = 12;
-
 const PUBLIC_USER_FIELDS = `
   id,
   name,

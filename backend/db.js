@@ -1,5 +1,8 @@
 const mysql = require("mysql2/promise");
 const path = require("path");
+const bcrypt = require("bcrypt");
+
+const SALT_ROUNDS = 12;
 const SAFE_SELECT_FIELDS = {
   users: "id, name, email, role, avatar, username",
   projects: "*",
@@ -17,6 +20,7 @@ function getPool() {
   if (!pool) {
     throw new Error("database not initialized; call initDb() first");
   }
+
   return pool;
 }
 
@@ -36,14 +40,12 @@ async function run(sql, params = []) {
 }
 
 async function search(tableName, columns, keyword) {
-  const safeSelect = SAFE_SELECT_FIELDS[tableName] || "*";
-
   if (!keyword || !columns || columns.length === 0) {
-    return all(`SELECT ${safeSelect} FROM ${tableName}`);
+    return all(`SELECT * FROM ${tableName}`);
   }
 
   const whereClause = columns.map((col) => `${col} LIKE ?`).join(" OR ");
-  const sql = `SELECT ${safeSelect} FROM ${tableName} WHERE ${whereClause}`;
+  const sql = `SELECT * FROM ${tableName} WHERE ${whereClause}`;
   const params = columns.map(() => `%${keyword}%`);
 
   return all(sql, params);
@@ -54,10 +56,12 @@ async function tableExists(tableName) {
     `
     SELECT COUNT(*) AS count
     FROM information_schema.tables
-    WHERE table_schema = DATABASE() AND table_name = ?
-  `,
-    [tableName]
+    WHERE table_schema = DATABASE()
+      AND table_name = ?
+    `,
+    [tableName],
   );
+
   return Number(row?.count ?? 0) > 0;
 }
 
@@ -69,10 +73,23 @@ async function columnExists(tableName, columnName) {
     WHERE table_schema = DATABASE()
       AND table_name = ?
       AND column_name = ?
-  `,
-    [tableName, columnName]
+    `,
+    [tableName, columnName],
   );
+
   return Number(row?.count ?? 0) > 0;
+}
+
+function makeUsername(name, email) {
+  const baseFromName = String(name)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ".")
+
+  const cleanedName = baseFromName.replace(/^\.+|\.+$/g, "");
+  if (cleanedName) return cleanedName;
+
+  return String(email).split("@")[0].toLowerCase();
 }
 
 async function ensureSchema() {
@@ -86,6 +103,16 @@ async function ensureSchema() {
       username VARCHAR(100) NULL UNIQUE,
       password_hash VARCHAR(255) NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await getPool().execute(`
+    CREATE TABLE IF NOT EXISTS auth_tokens (
+      token VARCHAR(128) PRIMARY KEY,
+      user_id INT NOT NULL,
+      expires_at DATETIME NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `);
 
@@ -137,38 +164,70 @@ async function ensureSchema() {
     )
   `);
 
-  // --- Add missing line item fields from design doc (safe ALTERs) ---
+  if (!(await columnExists("users", "username"))) {
+    await getPool().execute(
+      "ALTER TABLE users ADD COLUMN username VARCHAR(100) NULL UNIQUE",
+    );
+  }
+
+  if (!(await columnExists("users", "password_hash"))) {
+    await getPool().execute(
+      "ALTER TABLE users ADD COLUMN password_hash VARCHAR(255) NULL",
+    );
+  }
+
+  const existingUsers = await all("SELECT id, name, email FROM users");
+  const defaultPasswordHash = await bcrypt.hash("ChangeMe123!", SALT_ROUNDS);
+
+  for (const user of existingUsers) {
+    const username = makeUsername(user.name, user.email);
+
+    await getPool().execute(
+      `
+      UPDATE users
+      SET username = COALESCE(username, ?),
+          password_hash = COALESCE(password_hash, ?)
+      WHERE id = ?
+      `,
+      [username, defaultPasswordHash, user.id],
+    );
+  }
+
   if (!(await columnExists("line_items", "approver_id"))) {
     await getPool().execute("ALTER TABLE line_items ADD COLUMN approver_id INT NULL");
   }
+
   if (!(await columnExists("line_items", "decision_date"))) {
     await getPool().execute("ALTER TABLE line_items ADD COLUMN decision_date DATE NULL");
   }
+
   if (!(await columnExists("line_items", "payment_date"))) {
     await getPool().execute("ALTER TABLE line_items ADD COLUMN payment_date DATE NULL");
   }
+
   if (!(await columnExists("line_items", "rejection_reason"))) {
     await getPool().execute("ALTER TABLE line_items ADD COLUMN rejection_reason TEXT NULL");
   }
+
   if (!(await columnExists("line_items", "budget_id"))) {
     await getPool().execute("ALTER TABLE line_items ADD COLUMN budget_id INT NULL");
   }
 
   const hasBudgets = await tableExists("budgets");
+
   if (hasBudgets) {
     await getPool().execute(`
       INSERT INTO budgets (project_id, total_allocated_amount, remaining_balance)
       SELECT
-        p.id as project_id,
-        COALESCE(p.budget, 0) as total_allocated_amount,
-        COALESCE(p.budget, 0) -
-          COALESCE((
-            SELECT SUM(li.amount)
-            FROM line_items li
-            WHERE li.project_id = p.id
-              AND li.type = 'expense'
-              AND li.status != 'rejected'
-          ), 0) as remaining_balance
+        p.id,
+        COALESCE(p.budget, 0),
+        COALESCE(p.budget, 0) - COALESCE((
+          SELECT SUM(li.amount)
+          FROM line_items li
+          WHERE li.project_id = p.id
+            AND li.type = 'expense'
+            AND li.status != 'rejected'
+        ), 0)
       FROM projects p
       LEFT JOIN budgets b ON b.project_id = p.id
       WHERE b.project_id IS NULL
@@ -182,12 +241,12 @@ async function ensureSchema() {
     `);
   }
 
-  // --- Backfill: project_users membership for managers and requestors ---
   await getPool().execute(`
     INSERT IGNORE INTO project_users (project_id, user_id)
-    SELECT id as project_id, manager_id as user_id
+    SELECT id, manager_id
     FROM projects
   `);
+
   await getPool().execute(`
     INSERT IGNORE INTO project_users (project_id, user_id)
     SELECT DISTINCT project_id, requestor_id
@@ -227,8 +286,11 @@ async function seedData() {
 
   for (const p of projects) {
     await run(
-      "INSERT INTO projects (project_code, name, manager_id, start_date, end_date, budget, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      p
+      `
+      INSERT INTO projects (project_code, name, manager_id, start_date, end_date, budget, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      `,
+      p,
     );
   }
 
@@ -247,8 +309,11 @@ async function seedData() {
 
   for (const li of items) {
     await run(
-      "INSERT INTO line_items (item_code, description, project_id, requestor_id, type, amount, request_date, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-      li
+      `
+      INSERT INTO line_items (item_code, description, project_id, requestor_id, type, amount, request_date, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      li,
     );
   }
 }
@@ -262,7 +327,7 @@ async function initDb() {
 
   if (!user || !database) {
     throw new Error(
-      "Set MYSQL_USER and MYSQL_DATABASE (and optionally MYSQL_HOST, MYSQL_PORT, MYSQL_PASSWORD) in a root .env file or the environment."
+      "Set MYSQL_USER and MYSQL_DATABASE in the root .env file.",
     );
   }
 
@@ -281,6 +346,7 @@ async function initDb() {
 
   const userCountRow = await get("SELECT COUNT(*) AS count FROM users");
   const count = Number(userCountRow?.count ?? 0);
+
   if (count === 0) {
     await seedData();
   }

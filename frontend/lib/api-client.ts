@@ -21,12 +21,10 @@ export function useApi() {
         headers.Authorization = `Bearer ${token}`;
       }
 
-      const res = await fetch(buildApiUrl(path), {
+      return fetch(buildApiUrl(path), {
         ...init,
         headers,
       });
-
-      return res;
     },
     [token],
   );
