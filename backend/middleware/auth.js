@@ -1,20 +1,42 @@
 const { get } = require("../db");
 
-async function loadUserFromHeader(req) {
-  const raw = req.header("x-user-id");
-  if (!raw) return null;
-  const id = Number(raw);
-  if (!Number.isInteger(id) || id <= 0) return null;
-  return await get("SELECT * FROM users WHERE id = ?", [id]);
+const PUBLIC_USER_FIELDS = `
+  u.id,
+  u.name,
+  u.email,
+  u.role,
+  u.avatar,
+  u.username
+`;
+
+async function loadUserFromToken(req) {
+  const authHeader = req.header("authorization");
+
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return null;
+  }
+
+  const token = authHeader.slice(7).trim();
+
+  if (!token) {
+    return null;
+  }
+
+  return await get(
+    `
+    SELECT ${PUBLIC_USER_FIELDS}
+    FROM auth_tokens t
+    JOIN users u ON u.id = t.user_id
+    WHERE t.token = ?
+      AND t.expires_at > NOW()
+    `,
+    [token],
+  );
 }
 
-/**
- * Attaches req.user if x-user-id is provided and valid.
- * Does not reject if missing.
- */
 async function attachUser(req, _res, next) {
   try {
-    req.user = await loadUserFromHeader(req);
+    req.user = await loadUserFromToken(req);
     next();
   } catch (err) {
     next(err);
@@ -23,21 +45,30 @@ async function attachUser(req, _res, next) {
 
 function requireUser(req, res, next) {
   if (!req.user) {
-    return res.status(401).json({ error: "missing or invalid x-user-id" });
+    return res.status(401).json({ error: "unauthorized" });
   }
+
   next();
 }
 
 function requireRole(roles) {
   const allowed = Array.isArray(roles) ? roles : [roles];
+
   return (req, res, next) => {
-    if (!req.user) return res.status(401).json({ error: "missing or invalid x-user-id" });
+    if (!req.user) {
+      return res.status(401).json({ error: "unauthorized" });
+    }
+
     if (!allowed.includes(req.user.role)) {
       return res.status(403).json({ error: "forbidden" });
     }
+
     next();
   };
 }
 
-module.exports = { attachUser, requireUser, requireRole };
-
+module.exports = {
+  attachUser,
+  requireUser,
+  requireRole,
+};

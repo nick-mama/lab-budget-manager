@@ -4,19 +4,22 @@ import * as React from "react";
 import { buildApiUrl } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
-type ApiFetchInit = Omit<RequestInit, "headers"> & {
+type ApiFetchInit = RequestInit & {
   headers?: Record<string, string>;
 };
 
 export function useApi() {
-  const { userId } = useAuth();
+  const { token } = useAuth();
 
   const apiFetch = React.useCallback(
     async (path: string, init: ApiFetchInit = {}) => {
       const headers: Record<string, string> = {
         ...(init.headers ?? {}),
       };
-      if (userId) headers["x-user-id"] = String(userId);
+
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
 
       const res = await fetch(buildApiUrl(path), {
         ...init,
@@ -25,9 +28,8 @@ export function useApi() {
 
       return res;
     },
-    [userId],
+    [token],
   );
 
-  return { apiFetch, userId };
+  return { apiFetch };
 }
-

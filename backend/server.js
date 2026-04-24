@@ -3,6 +3,7 @@ const cors = require("cors");
 const { initDb } = require("./db");
 const { attachUser } = require("./middleware/auth");
 
+const authRouter = require("./routes/auth");
 const usersRouter = require("./routes/users");
 const projectsRouter = require("./routes/projects");
 const lineItemsRouter = require("./routes/lineItems");
@@ -16,27 +17,22 @@ const corsOptions = {
   origin: "http://localhost:3000",
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: [
-    "Content-Type",
-    "Authorization",
-    "x-user-id",
-    "x-requested-with",
-  ],
+  allowedHeaders: ["Content-Type", "Authorization", "x-requested-with"],
 };
 
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
-
 app.use(express.json());
 app.use(attachUser);
 
+app.use("/api/auth", authRouter);
 app.use("/api/users", usersRouter);
 app.use("/api/projects", projectsRouter);
 app.use("/api/line-items", lineItemsRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/budgets", budgetsRouter);
 
-app.get("/api/health", (req, res) => {
+app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 

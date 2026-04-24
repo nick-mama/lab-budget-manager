@@ -1,5 +1,12 @@
 const mysql = require("mysql2/promise");
 const path = require("path");
+const SAFE_SELECT_FIELDS = {
+  users: "id, name, email, role, avatar, username",
+  projects: "*",
+  line_items: "*",
+  budgets: "*",
+  project_users: "*",
+};
 
 // Load .env from repo root when running from backend/
 require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
@@ -13,37 +20,32 @@ function getPool() {
   return pool;
 }
 
-/** First row or null */
 async function get(sql, params = []) {
   const [rows] = await getPool().execute(sql, params);
   return rows[0] ?? null;
 }
 
-/** All rows */
 async function all(sql, params = []) {
   const [rows] = await getPool().execute(sql, params);
   return rows;
 }
 
-/** INSERT/UPDATE/DELETE — returns { lastInsertRowid } for API parity */
 async function run(sql, params = []) {
   const [result] = await getPool().execute(sql, params);
   return { lastInsertRowid: result.insertId };
 }
 
-/**
- * Searches a table for a keyword across specified columns.
- * @param {string} tableName - The name of the table to search in.
- * @param {string[]} columns - An array of column names to search against.
- * @param {string} keyword - The search term.
- */
 async function search(tableName, columns, keyword) {
+  const safeSelect = SAFE_SELECT_FIELDS[tableName] || "*";
+
   if (!keyword || !columns || columns.length === 0) {
-    return all(`SELECT * FROM ${tableName}`);
+    return all(`SELECT ${safeSelect} FROM ${tableName}`);
   }
+
   const whereClause = columns.map((col) => `${col} LIKE ?`).join(" OR ");
-  const sql = `SELECT * FROM ${tableName} WHERE ${whereClause}`;
+  const sql = `SELECT ${safeSelect} FROM ${tableName} WHERE ${whereClause}`;
   const params = columns.map(() => `%${keyword}%`);
+
   return all(sql, params);
 }
 
@@ -81,6 +83,8 @@ async function ensureSchema() {
       email VARCHAR(255) NOT NULL UNIQUE,
       role VARCHAR(100) NOT NULL,
       avatar VARCHAR(32) NOT NULL,
+      username VARCHAR(100) NULL UNIQUE,
+      password_hash VARCHAR(255) NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
@@ -89,8 +93,7 @@ async function ensureSchema() {
     CREATE TABLE IF NOT EXISTS projects (
       id INT AUTO_INCREMENT PRIMARY KEY,
       project_code VARCHAR(50) NOT NULL UNIQUE,
-      name VARCHAR(255) NOT 
-      NULL,
+      name VARCHAR(255) NOT NULL,
       manager_id INT NOT NULL,
       start_date DATE NOT NULL,
       end_date DATE NOT NULL,
@@ -115,7 +118,6 @@ async function ensureSchema() {
     )
   `);
 
-  // --- Design-doc aligned tables ---
   await getPool().execute(`
     CREATE TABLE IF NOT EXISTS budgets (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -152,7 +154,6 @@ async function ensureSchema() {
     await getPool().execute("ALTER TABLE line_items ADD COLUMN budget_id INT NULL");
   }
 
-  // --- Backfill: create one budget per project and link existing line_items to it ---
   const hasBudgets = await tableExists("budgets");
   if (hasBudgets) {
     await getPool().execute(`
@@ -173,7 +174,6 @@ async function ensureSchema() {
       WHERE b.project_id IS NULL
     `);
 
-    // Link existing line_items to their project's budget if budget_id is null
     await getPool().execute(`
       UPDATE line_items li
       JOIN budgets b ON b.project_id = li.project_id
@@ -196,16 +196,24 @@ async function ensureSchema() {
 }
 
 async function seedData() {
+  const demoPasswordHash = await bcrypt.hash("Password123!", SALT_ROUNDS);
+
   const users = [
-    ["Geoffrey Agustin", "geoffrey.agustin@university.edu", "Lab Manager", "GA"],
-    ["Camden Forbes", "camden.forbes@university.edu", "Researcher", "CF"],
-    ["Mehak Jammu", "mehak.jammu@university.edu", "Lab Manager", "MJ"],
-    ["Nick Mamaoag", "nick.mamaoag@university.edu", "Lab Manager", "NM"],
-    ["Christopher Velez", "christopher.velez@university.edu", "Financial Admin", "CV"],
+    ["Geoffrey Agustin", "geoffrey.agustin@university.edu", "Lab Manager", "GA", "geoffrey.agustin", demoPasswordHash],
+    ["Camden Forbes", "camden.forbes@university.edu", "Researcher", "CF", "camden.forbes", demoPasswordHash],
+    ["Mehak Jammu", "mehak.jammu@university.edu", "Lab Manager", "MJ", "mehak.jammu", demoPasswordHash],
+    ["Nick Mamaoag", "nick.mamaoag@university.edu", "Lab Manager", "NM", "nick.mamaoag", demoPasswordHash],
+    ["Christopher Velez", "christopher.velez@university.edu", "Financial Admin", "CV", "christopher.velez", demoPasswordHash],
   ];
 
   for (const u of users) {
-    await run("INSERT INTO users (name, email, role, avatar) VALUES (?, ?, ?, ?)", u);
+    await run(
+      `
+      INSERT INTO users (name, email, role, avatar, username, password_hash)
+      VALUES (?, ?, ?, ?, ?, ?)
+      `,
+      u,
+    );
   }
 
   const projects = [
@@ -278,4 +286,10 @@ async function initDb() {
   }
 }
 
-module.exports = { initDb, get, all, run, search };
+module.exports = {
+  initDb,
+  get,
+  all,
+  run,
+  search,
+};

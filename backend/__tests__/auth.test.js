@@ -40,7 +40,7 @@ describe("auth middleware", () => {
       req.header.mockReturnValue("3");
       mockDb.get.mockResolvedValue(user);
       await attachUser(req, res, next);
-      expect(mockDb.get).toHaveBeenCalledWith("SELECT * FROM users WHERE id = ?", [3]);
+      expect(mockDb.get).toHaveBeenCalledWith("SELECT ${PUBLIC_USER_FIELDS} FROM users WHERE id = ?", [3]);
       expect(req.user).toEqual(user);
       expect(next).toHaveBeenCalledWith();
     });
