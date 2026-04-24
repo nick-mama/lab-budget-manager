@@ -30,6 +30,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { MoreHorizontal, ArrowUpRight, ArrowDownLeft } from "lucide-react";
 import { useCurrentUser } from "@/hooks/use-current-user";
+import { useApi } from "@/lib/api-client";
 
 type LineItem = {
   id: number;
@@ -57,6 +58,7 @@ type Props = {
 
 export function LineItemsTable({ filters, refreshKey, onRefresh }: Props) {
   const { user: currentUser } = useCurrentUser();
+  const { apiFetch } = useApi();
 
   const [items, setItems] = React.useState<LineItem[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -79,11 +81,7 @@ export function LineItemsTable({ filters, refreshKey, onRefresh }: Props) {
       params.set("project_id", filters.project_id);
     }
 
-    fetch(`http://localhost:4000/api/line-items?${params.toString()}`, {
-      headers: {
-        "x-user-id": currentUser ? String(currentUser.id) : "5",
-      },
-    })
+    apiFetch(`/api/line-items?${params.toString()}`)
       .then((res) => res.json())
       .then((data) => {
         setItems(Array.isArray(data) ? data : []);
@@ -135,17 +133,13 @@ export function LineItemsTable({ filters, refreshKey, onRefresh }: Props) {
     extra: Record<string, string> = {},
   ) {
     try {
-      const res = await fetch(
-        `http://localhost:4000/api/line-items/${item.id}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            "x-user-id": currentUser ? String(currentUser.id) : "5",
-          },
-          body: JSON.stringify({ status, ...extra }),
+      const res = await apiFetch(`/api/line-items/${item.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
         },
-      );
+        body: JSON.stringify({ status, ...extra }),
+      });
 
       if (res.ok) {
         onRefresh?.();
@@ -164,16 +158,10 @@ export function LineItemsTable({ filters, refreshKey, onRefresh }: Props) {
     if (!confirmed) return;
 
     try {
-      const res = await fetch(
-        `http://localhost:4000/api/line-items/${item.id}`,
-        {
-          method: "DELETE",
-          headers: {
-            "x-user-id": currentUser ? String(currentUser.id) : "5",
-          },
-        },
-      );
-
+      const res = await apiFetch(`/api/line-items/${item.id}`, {
+        method: "DELETE",
+      });
+      
       if (res.ok) {
         onRefresh?.();
       } else {

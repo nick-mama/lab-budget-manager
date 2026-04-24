@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, DollarSign, PiggyBank } from "lucide-react";
 import { useCurrentUser } from "@/hooks/use-current-user";
+import { useApi } from "@/lib/api-client"
 
 type ChangeType = "positive" | "neutral" | "negative";
 
@@ -33,6 +34,7 @@ function formatUsd(n: number) {
 
 export function BudgetSummary() {
   const { user: currentUser } = useCurrentUser();
+  const { apiFetch } = useApi();
 
   const [totals, setTotals] = useState({
     allocated: 0,
@@ -48,16 +50,8 @@ export function BudgetSummary() {
     async function loadSummary() {
       try {
         const [budgetsRes, lineItemsRes] = await Promise.all([
-          fetch("http://localhost:4000/api/budgets", {
-            headers: {
-              "x-user-id": currentUser ? String(currentUser.id) : "5",
-            },
-          }),
-          fetch("http://localhost:4000/api/line-items", {
-            headers: {
-              "x-user-id": currentUser ? String(currentUser.id) : "5",
-            },
-          }),
+          apiFetch("/api/budgets"),
+          apiFetch("/api/line-items"),
         ]);
 
         const budgets: BudgetRecord[] = budgetsRes.ok

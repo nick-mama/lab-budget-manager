@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bell, Search } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -30,10 +29,8 @@ type UserSummary = {
 
 export function Navbar({ title, subtitle }: NavbarProps) {
   const [showNotifications, setShowNotifications] = useState(false);
-
-  const { apiFetch, userId: authUserId } = useApi();
-  const { setUserId: setAuthUserId } = useAuth();
-
+  const { apiFetch } = useApi();
+  const { user } = useAuth();
   const { userId: selectedUserId, setUserId: setSelectedUserId } =
     useCurrentUserStore();
 
@@ -43,11 +40,15 @@ export function Navbar({ title, subtitle }: NavbarProps) {
   useEffect(() => {
     let cancelled = false;
 
-    (async () => {
+    async function loadUsers() {
       setLoadingUsers(true);
+
       try {
         const res = await apiFetch("/api/users");
-        if (!res.ok) return;
+
+        if (!res.ok) {
+          return;
+        }
 
         const data = (await res.json()) as UserSummary[];
 
@@ -59,48 +60,47 @@ export function Navbar({ title, subtitle }: NavbarProps) {
           setLoadingUsers(false);
         }
       }
-    })();
+    }
+
+    loadUsers();
 
     return () => {
       cancelled = true;
     };
   }, [apiFetch]);
 
-  // Keep store initialized from auth if store is empty
   useEffect(() => {
-    if (!selectedUserId && authUserId) {
-      setSelectedUserId(authUserId);
+    if (user?.id && !selectedUserId) {
+      setSelectedUserId(user.id);
     }
-  }, [selectedUserId, authUserId, setSelectedUserId]);
+  }, [user, selectedUserId, setSelectedUserId]);
+
+  const currentUser =
+    users.find((u) => u.id === selectedUserId) ??
+    users.find((u) => u.id === user?.id) ??
+    null;
 
   return (
-    <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-border bg-card px-6">
+    <header className="flex items-center justify-between border-b bg-white px-6 py-4">
       <div>
-        <h1 className="text-lg font-semibold text-foreground">{title}</h1>
+        <h1 className="text-2xl font-semibold text-slate-900">{title}</h1>
         {subtitle && (
-          <p className="text-sm text-muted-foreground">{subtitle}</p>
+          <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
         )}
       </div>
 
       <div className="flex items-center gap-4">
-        <div className="block">
-          <Label className="sr-only">Active user</Label>
-          <Select
-            value={selectedUserId ? String(selectedUserId) : ""}
-            onValueChange={(v) => {
-              const n = Number(v);
-              const nextUserId = Number.isFinite(n) && n > 0 ? n : null;
+        <GlobalSearch />
 
-              setAuthUserId(nextUserId);
-              if (nextUserId) {
-                setSelectedUserId(nextUserId);
-              }
-            }}
+        <div className="flex items-center gap-2">
+          <Label className="text-sm text-slate-600">Active user</Label>
+          <Select
+            value={String(currentUser?.id ?? user?.id ?? "")}
+            disabled
+            onValueChange={() => {}}
           >
-            <SelectTrigger className="w-[220px] bg-secondary">
-              <SelectValue
-                placeholder={loadingUsers ? "Loading users…" : "Choose user"}
-              />
+            <SelectTrigger className="w-[220px]">
+              <SelectValue placeholder={loadingUsers ? "Loading..." : "User"} />
             </SelectTrigger>
             <SelectContent>
               {users.map((u) => (
@@ -112,9 +112,13 @@ export function Navbar({ title, subtitle }: NavbarProps) {
           </Select>
         </div>
 
-        <div className="hidden md:block">
-          <GlobalSearch />
-        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setShowNotifications(!showNotifications)}
+        >
+          <Bell className="h-5 w-5" />
+        </Button>
       </div>
     </header>
   );

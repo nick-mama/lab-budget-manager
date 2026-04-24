@@ -49,13 +49,10 @@ export function UsersGrid({ filters, refreshKey }: Props) {
     if (!confirmed) return;
 
     try {
-      const res = await fetch(`http://localhost:4000/api/users/${userId}`, {
+      const res = await apiFetch(`/api/users/${userId}`, {
         method: "DELETE",
-        headers: {
-          "x-user-id": currentUser ? String(currentUser.id) : "5",
-        },
       });
-
+      
       if (!res.ok) {
         const text = await res.text();
         throw new Error(text || "Failed to remove user");

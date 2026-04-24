@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Plus, Search } from "lucide-react";
 import { useCurrentUserStore } from "@/lib/current-user-store";
+import { useApi } from "@/lib/api-client";
 
 type Role = "Researcher" | "Lab Manager" | "Financial Admin";
 
@@ -38,6 +39,7 @@ type CurrentUserResponse = {
 
 export function UsersHeader({ onFiltersChange, onCreated }: Props) {
   const { userId } = useCurrentUserStore();
+  const { apiFetch } = useApi();
 
   const [open, setOpen] = React.useState(false);
 
@@ -68,11 +70,7 @@ export function UsersHeader({ onFiltersChange, onCreated }: Props) {
 
     (async () => {
       try {
-        const res = await fetch(`http://localhost:4000/api/users/${userId}`, {
-          headers: {
-            "x-user-id": String(userId),
-          },
-        });
+        const res = await apiFetch(`/api/users/${userId}`);
 
         if (!res.ok) {
           throw new Error("Failed to load active user");
@@ -126,11 +124,10 @@ export function UsersHeader({ onFiltersChange, onCreated }: Props) {
     setSubmitting(true);
 
     try {
-      const res = await fetch("http://localhost:4000/api/users", {
+      const res = await apiFetch("/api/users", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-user-id": String(userId),
         },
         body: JSON.stringify({
           name: name.trim(),

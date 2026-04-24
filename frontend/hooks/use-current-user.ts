@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useCurrentUserStore } from "@/lib/current-user-store";
+import { useApi } from "@/lib/api-client";
 
 type UserRecord = {
   id: number;
@@ -12,6 +13,7 @@ type UserRecord = {
 
 export function useCurrentUser() {
   const { userId } = useCurrentUserStore();
+  const { apiFetch } = useApi();
   const [user, setUser] = useState<UserRecord | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -28,11 +30,7 @@ export function useCurrentUser() {
       try {
         setLoading(true);
 
-        const res = await fetch("http://localhost:4000/api/users", {
-          headers: {
-            "x-user-id": "5",
-          },
-        });
+        const res = await apiFetch("/api/users");
 
         if (!res.ok) {
           throw new Error("Failed to load users");

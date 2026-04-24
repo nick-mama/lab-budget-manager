@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useApi } from "@/lib/api-client";
 
 type UserRoleEditorProps = {
   userId: number;
@@ -29,6 +30,7 @@ export function UserRoleEditor({
   const { user: actingUser } = useCurrentUser();
   const [role, setRole] = useState(currentRole);
   const [saving, setSaving] = useState(false);
+  const { apiFetch } = useApi();
 
   if (actingUser?.role !== "Financial Admin") {
     return null;
@@ -47,11 +49,10 @@ export function UserRoleEditor({
       const firstName = parts[0] ?? "";
       const lastName = parts.slice(1).join(" ") || "-";
 
-      const res = await fetch(`http://localhost:4000/api/users/${userId}`, {
+      const res = await apiFetch(`/api/users/${userId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          "x-user-id": String(actingUser.id),
         },
         body: JSON.stringify({
           firstName,

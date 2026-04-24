@@ -27,6 +27,7 @@ import {
   canEditProject,
   canViewProject,
 } from "@/lib/permissions";
+import { useApi } from "@/lib/api-client";
 
 function formatUsd(n: number) {
   return new Intl.NumberFormat("en-US", {
@@ -56,21 +57,16 @@ export function ProjectsTable({
 }: ProjectsTableProps) {
   const router = useRouter();
   const { user: currentUser } = useCurrentUser();
+  const { apiFetch } = useApi();
 
   async function handleDelete(projectId: number) {
     const confirmed = window.confirm("Delete this project?");
     if (!confirmed) return;
 
     try {
-      const res = await fetch(
-        `http://localhost:4000/api/projects/${projectId}`,
-        {
-          method: "DELETE",
-          headers: {
-            "x-user-id": currentUser ? String(currentUser.id) : "5",
-          },
-        },
-      );
+      const res = await apiFetch(`/api/projects/${projectId}`, {
+        method: "DELETE",
+      });
 
       if (!res.ok) throw new Error("Delete failed");
 

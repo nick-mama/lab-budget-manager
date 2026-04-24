@@ -21,6 +21,7 @@ import {
 import { toast } from "sonner";
 import { useCurrentUserStore } from "@/lib/current-user-store";
 import { useCurrentUser } from "@/hooks/use-current-user";
+import { useApi } from "@/lib/api-client";
 
 type UserRecord = {
   id: number;
@@ -32,6 +33,7 @@ type UserRecord = {
 export function SettingsForm() {
   const { userId } = useCurrentUserStore();
   const { user: actingUser } = useCurrentUser();
+  const { apiFetch } = useApi();
 
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -57,11 +59,7 @@ export function SettingsForm() {
       try {
         setLoadingProfile(true);
 
-        const res = await fetch("http://localhost:4000/api/users", {
-          headers: {
-            "x-user-id": actingUser ? String(actingUser.id) : "5",
-          },
-        });
+        const res = await apiFetch("/api/users");
 
         if (!res.ok) {
           throw new Error("Failed to load users");
@@ -131,11 +129,10 @@ export function SettingsForm() {
     try {
       setSavingProfile(true);
 
-      const res = await fetch(`http://localhost:4000/api/users/${userId}`, {
+      const res = await apiFetch(`/api/users/${userId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          "x-user-id": actingUser ? String(actingUser.id) : "5",
         },
         body: JSON.stringify({
           firstName: firstName.trim(),

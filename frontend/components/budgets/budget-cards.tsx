@@ -17,6 +17,7 @@ import {
   canEditProject,
   canViewProject,
 } from "@/lib/permissions";
+import { useApi } from "@/lib/api-client";
 
 type BudgetRecord = {
   id: number;
@@ -49,6 +50,7 @@ function getStatusText(percentage: number): { text: string; color: string } {
 export function BudgetCards() {
   const router = useRouter();
   const { user: currentUser } = useCurrentUser();
+  const { apiFetch } = useApi();
 
   const [budgets, setBudgets] = useState<BudgetRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,11 +58,7 @@ export function BudgetCards() {
   useEffect(() => {
     async function loadBudgets() {
       try {
-        const res = await fetch("http://localhost:4000/api/budgets", {
-          headers: {
-            "x-user-id": currentUser ? String(currentUser.id) : "5",
-          },
-        });
+        const res = await apiFetch("/api/budgets");
 
         if (!res.ok) {
           throw new Error("Failed to load budgets");
@@ -84,15 +82,9 @@ export function BudgetCards() {
     if (!confirmed) return;
 
     try {
-      const res = await fetch(
-        `http://localhost:4000/api/projects/${projectId}`,
-        {
-          method: "DELETE",
-          headers: {
-            "x-user-id": currentUser ? String(currentUser.id) : "5",
-          },
-        },
-      );
+      const res = await apiFetch(`/api/projects/${projectId}`, {
+        method: "DELETE",
+      });
 
       if (!res.ok) {
         throw new Error("Delete failed");

@@ -43,32 +43,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const setAuth = React.useCallback((nextToken: string | null, nextUser: AuthUser | null) => {
-    setToken(nextToken);
-    setUser(nextUser);
+  const setAuth = React.useCallback(
+    (nextToken: string | null, nextUser: AuthUser | null) => {
+      setToken(nextToken);
+      setUser(nextUser);
 
-    try {
-      if (nextToken) {
-        window.localStorage.setItem(TOKEN_KEY, nextToken);
-      } else {
-        window.localStorage.removeItem(TOKEN_KEY);
-      }
+      try {
+        if (nextToken) {
+          window.localStorage.setItem(TOKEN_KEY, nextToken);
+        } else {
+          window.localStorage.removeItem(TOKEN_KEY);
+        }
 
-      if (nextUser) {
-        window.localStorage.setItem(USER_KEY, JSON.stringify(nextUser));
-      } else {
-        window.localStorage.removeItem(USER_KEY);
+        if (nextUser) {
+          window.localStorage.setItem(USER_KEY, JSON.stringify(nextUser));
+        } else {
+          window.localStorage.removeItem(USER_KEY);
+        }
+      } catch {
       }
-    } catch {
-    }
-  }, []);
+    },
+    [],
+  );
 
   const logout = React.useCallback(() => {
     setAuth(null, null);
   }, [setAuth]);
 
   const value = React.useMemo(
-    () => ({ token, user, setAuth, logout }),
+    () => ({
+      token,
+      user,
+      setAuth,
+      logout,
+    }),
     [token, user, setAuth, logout],
   );
 

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useCurrentUser } from "@/hooks/use-current-user";
+import { useApi } from "@/lib/api-client";
 
 type Researcher = {
   id: number;
@@ -47,6 +48,7 @@ type FormErrors = {
 export default function EditProjectForm({ project }: { project: Project }) {
   const router = useRouter();
   const { user: currentUser } = useCurrentUser();
+  const { apiFetch } = useApi();
 
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
@@ -70,11 +72,7 @@ export default function EditProjectForm({ project }: { project: Project }) {
   useEffect(() => {
     async function loadUsers() {
       try {
-        const res = await fetch("http://localhost:4000/api/users", {
-          headers: {
-            "x-user-id": currentUser ? String(currentUser.id) : "5",
-          },
-        });
+        const res = await apiFetch("/api/users");
 
         if (!res.ok) {
           throw new Error("Failed to load users");
@@ -162,20 +160,16 @@ export default function EditProjectForm({ project }: { project: Project }) {
     try {
       setSaving(true);
 
-      const res = await fetch(
-        `http://localhost:4000/api/projects/${project.id}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            "x-user-id": currentUser ? String(currentUser.id) : "5",
-          },
-          body: JSON.stringify({
-            ...form,
-            researcher_ids: selectedResearchers,
-          }),
+      const res = await apiFetch(`/api/projects/${project.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
         },
-      );
+        body: JSON.stringify({
+          ...form,
+          researcher_ids: selectedResearchers,
+        }),
+      });
 
       if (!res.ok) {
         const text = await res.text();

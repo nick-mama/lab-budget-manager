@@ -15,6 +15,8 @@ import {
   FlaskConical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useApi } from "@/lib/api-client";
+import { useAuth } from "@/lib/auth";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -45,6 +47,8 @@ function getInitials(name: string) {
 export function Sidebar() {
   const pathname = usePathname();
   const { userId } = useCurrentUserStore();
+  const { apiFetch } = useApi();
+  const { user, logout } = useAuth();
 
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
@@ -56,11 +60,7 @@ export function Sidebar() {
       try {
         setLoadingUsers(true);
 
-        const res = await fetch("http://localhost:4000/api/users", {
-          headers: {
-            "x-user-id": "5",
-          },
-        });
+        const res = await apiFetch("/api/users");
 
         if (!res.ok) {
           throw new Error("Failed to load users");
@@ -90,7 +90,7 @@ export function Sidebar() {
     };
   }, []);
 
-  const user = users.find((u) => u.id === userId) ?? null;
+  const activeUser = user;
 
   return (
     <aside className="fixed inset-y-0 left-0 z-50 flex h-full w-64 flex-col bg-primary">
@@ -132,15 +132,15 @@ export function Sidebar() {
       <div className="border-t border-sidebar-border p-4">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-medium text-accent-foreground">
-            {user ? getInitials(user.name) : "--"}
+            {activeUser ? getInitials(activeUser.name) : "--"}
           </div>
 
           <div className="flex-1">
             <p className="text-sm font-medium text-primary-foreground">
-              {loadingUsers ? "Loading..." : (user?.name ?? "Unknown User")}
+              {loadingUsers ? "Loading..." : (activeUser?.name ?? "Unknown User")}
             </p>
             <p className="text-xs text-primary-foreground/70">
-              {user?.role ?? ""}
+              {activeUser?.role ?? ""}
             </p>
           </div>
 
