@@ -15,6 +15,7 @@ import {
 import { useApi } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth";
 import { useCurrentUserStore } from "@/lib/current-user-store";
+import { GlobalSearch } from "./global-search";
 
 interface NavbarProps {
   title: string;
@@ -111,13 +112,8 @@ export function Navbar({ title, subtitle }: NavbarProps) {
           </Select>
         </div>
 
-        <div className="relative hidden md:block">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            type="search"
-            placeholder="Search projects, budgets..."
-            className="w-64 bg-secondary pl-9"
-          />
+        <div className="hidden md:block">
+          <GlobalSearch />
         </div>
       </div>
     </header>

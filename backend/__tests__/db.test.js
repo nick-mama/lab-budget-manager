@@ -58,4 +58,15 @@ describe("db module", () => {
       expect(mockExecute).toHaveBeenCalled();
     });
   });
+
+  describe("search", () => {
+    it("constructs correct SQL for keyword search", async () => {
+      mockExecute.mockResolvedValue([[]]);
+      await db.search("users", ["name", "email"], "test");
+      expect(mockExecute).toHaveBeenCalledWith(
+        expect.stringContaining("name LIKE ? OR email LIKE ?"),
+        ["%test%", "%test%"]
+      );
+    });
+  });
 });

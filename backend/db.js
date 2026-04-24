@@ -31,6 +31,22 @@ async function run(sql, params = []) {
   return { lastInsertRowid: result.insertId };
 }
 
+/**
+ * Searches a table for a keyword across specified columns.
+ * @param {string} tableName - The name of the table to search in.
+ * @param {string[]} columns - An array of column names to search against.
+ * @param {string} keyword - The search term.
+ */
+async function search(tableName, columns, keyword) {
+  if (!keyword || !columns || columns.length === 0) {
+    return all(`SELECT * FROM ${tableName}`);
+  }
+  const whereClause = columns.map((col) => `${col} LIKE ?`).join(" OR ");
+  const sql = `SELECT * FROM ${tableName} WHERE ${whereClause}`;
+  const params = columns.map(() => `%${keyword}%`);
+  return all(sql, params);
+}
+
 async function tableExists(tableName) {
   const row = await get(
     `
@@ -262,4 +278,4 @@ async function initDb() {
   }
 }
 
-module.exports = { initDb, get, all, run };
+module.exports = { initDb, get, all, run, search };
