@@ -52,7 +52,7 @@ export function UsersGrid({ filters, refreshKey }: Props) {
       const res = await apiFetch(`/api/users/${userId}`, {
         method: "DELETE",
       });
-      
+
       if (!res.ok) {
         const text = await res.text();
         throw new Error(text || "Failed to remove user");
@@ -140,13 +140,13 @@ export function UsersGrid({ filters, refreshKey }: Props) {
   }
 
   return (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    <div className="grid auto-rows-fr gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {filtered.length === 0 ? (
         <p className="text-muted-foreground text-sm">No team members found.</p>
       ) : (
         filtered.map((user) => (
-          <Card key={user.id} className="bg-card">
-            <CardContent className="p-6">
+          <Card key={user.id} className="h-full bg-card">
+            <CardContent className="flex h-full flex-col p-6">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
                   <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
@@ -184,25 +184,27 @@ export function UsersGrid({ filters, refreshKey }: Props) {
                 </div>
               </div>
 
-              <div className="mt-4 flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => router.push(`/users/${user.id}`)}
-                >
-                  View Profile
-                </Button>
-
-                {currentUser?.role === "Financial Admin" &&
-                currentUser.id !== user.id ? (
+              <div className="mt-auto pt-4">
+                <div className="flex flex-wrap gap-2">
                   <Button
                     type="button"
-                    variant="destructive"
-                    onClick={() => handleRemoveUser(user.id)}
+                    variant="outline"
+                    onClick={() => router.push(`/users/${user.id}`)}
                   >
-                    Remove User
+                    View Profile
                   </Button>
-                ) : null}
+
+                  {currentUser?.role === "Financial Admin" &&
+                  currentUser.id !== user.id ? (
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      onClick={() => handleRemoveUser(user.id)}
+                    >
+                      Remove User
+                    </Button>
+                  ) : null}
+                </div>
               </div>
             </CardContent>
           </Card>
