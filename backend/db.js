@@ -40,12 +40,14 @@ async function run(sql, params = []) {
 }
 
 async function search(tableName, columns, keyword) {
+  const safeSelect = SAFE_SELECT_FIELDS[tableName] || "*";
+
   if (!keyword || !columns || columns.length === 0) {
-    return all(`SELECT * FROM ${tableName}`);
+    return all(`SELECT ${safeSelect} FROM ${tableName}`);
   }
 
   const whereClause = columns.map((col) => `${col} LIKE ?`).join(" OR ");
-  const sql = `SELECT * FROM ${tableName} WHERE ${whereClause}`;
+  const sql = `SELECT ${safeSelect} FROM ${tableName} WHERE ${whereClause}`;
   const params = columns.map(() => `%${keyword}%`);
 
   return all(sql, params);
@@ -84,7 +86,7 @@ function makeUsername(name, email) {
   const baseFromName = String(name)
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ".")
+    .replace(/[^a-z0-9]+/g, ".");
 
   const cleanedName = baseFromName.replace(/^\.+|\.+$/g, "");
   if (cleanedName) return cleanedName;
@@ -177,10 +179,13 @@ async function ensureSchema() {
   }
 
   const existingUsers = await all("SELECT id, name, email FROM users");
-  const defaultPasswordHash = await bcrypt.hash("ChangeMe123!", SALT_ROUNDS);
 
   for (const user of existingUsers) {
     const username = makeUsername(user.name, user.email);
+    const defaultPasswordHash = await bcrypt.hash(
+      "ChangeMe123!",
+      SALT_ROUNDS,
+    );
 
     await getPool().execute(
       `
@@ -194,23 +199,33 @@ async function ensureSchema() {
   }
 
   if (!(await columnExists("line_items", "approver_id"))) {
-    await getPool().execute("ALTER TABLE line_items ADD COLUMN approver_id INT NULL");
+    await getPool().execute(
+      "ALTER TABLE line_items ADD COLUMN approver_id INT NULL",
+    );
   }
 
   if (!(await columnExists("line_items", "decision_date"))) {
-    await getPool().execute("ALTER TABLE line_items ADD COLUMN decision_date DATE NULL");
+    await getPool().execute(
+      "ALTER TABLE line_items ADD COLUMN decision_date DATE NULL",
+    );
   }
 
   if (!(await columnExists("line_items", "payment_date"))) {
-    await getPool().execute("ALTER TABLE line_items ADD COLUMN payment_date DATE NULL");
+    await getPool().execute(
+      "ALTER TABLE line_items ADD COLUMN payment_date DATE NULL",
+    );
   }
 
   if (!(await columnExists("line_items", "rejection_reason"))) {
-    await getPool().execute("ALTER TABLE line_items ADD COLUMN rejection_reason TEXT NULL");
+    await getPool().execute(
+      "ALTER TABLE line_items ADD COLUMN rejection_reason TEXT NULL",
+    );
   }
 
   if (!(await columnExists("line_items", "budget_id"))) {
-    await getPool().execute("ALTER TABLE line_items ADD COLUMN budget_id INT NULL");
+    await getPool().execute(
+      "ALTER TABLE line_items ADD COLUMN budget_id INT NULL",
+    );
   }
 
   const hasBudgets = await tableExists("budgets");
@@ -255,33 +270,111 @@ async function ensureSchema() {
 }
 
 async function seedData() {
-  const demoPasswordHash = await bcrypt.hash("Password123!", SALT_ROUNDS);
-
   const users = [
-    ["Geoffrey Agustin", "geoffrey.agustin@university.edu", "Lab Manager", "GA", "geoffrey.agustin", demoPasswordHash],
-    ["Camden Forbes", "camden.forbes@university.edu", "Researcher", "CF", "camden.forbes", demoPasswordHash],
-    ["Mehak Jammu", "mehak.jammu@university.edu", "Lab Manager", "MJ", "mehak.jammu", demoPasswordHash],
-    ["Nick Mamaoag", "nick.mamaoag@university.edu", "Lab Manager", "NM", "nick.mamaoag", demoPasswordHash],
-    ["Christopher Velez", "christopher.velez@university.edu", "Financial Admin", "CV", "christopher.velez", demoPasswordHash],
+    [
+      "Geoffrey Agustin",
+      "geoffrey.agustin@university.edu",
+      "Lab Manager",
+      "GA",
+      "geoffrey.agustin",
+    ],
+    [
+      "Camden Forbes",
+      "camden.forbes@university.edu",
+      "Researcher",
+      "CF",
+      "camden.forbes",
+    ],
+    [
+      "Mehak Jammu",
+      "mehak.jammu@university.edu",
+      "Lab Manager",
+      "MJ",
+      "mehak.jammu",
+    ],
+    [
+      "Nick Mamaoag",
+      "nick.mamaoag@university.edu",
+      "Lab Manager",
+      "NM",
+      "nick.mamaoag",
+    ],
+    [
+      "Christopher Velez",
+      "christopher.velez@university.edu",
+      "Financial Admin",
+      "CV",
+      "christopher.velez",
+    ],
   ];
 
   for (const u of users) {
+    const passwordHash = await bcrypt.hash("Password123!", SALT_ROUNDS);
+
     await run(
       `
       INSERT INTO users (name, email, role, avatar, username, password_hash)
       VALUES (?, ?, ?, ?, ?, ?)
       `,
-      u,
+      [...u, passwordHash],
     );
   }
 
   const projects = [
-    ["PRJ-001", "Biotech Lab Development", 4, "2024-03-01", "2025-06-30", 200000, "active"],
-    ["PRJ-002", "Quantum Computing Lab", 2, "2023-09-01", "2024-09-01", 180000, "completed"],
-    ["PRJ-003", "Neural Networks Study", 1, "2023-06-01", "2024-06-01", 85000, "closed"],
-    ["PRJ-004", "AI Research Initiative", 3, "2024-01-01", "2025-01-01", 120000, "active"],
-    ["PRJ-005", "Climate Study Analysis", 4, "2023-11-01", "2024-11-01", 75000, "active"],
-    ["PRJ-006", "Robotics Engineering", 1, "2024-02-01", "2025-02-01", 95000, "active"],
+    [
+      "PRJ-001",
+      "Biotech Lab Development",
+      4,
+      "2024-03-01",
+      "2025-06-30",
+      200000,
+      "active",
+    ],
+    [
+      "PRJ-002",
+      "Quantum Computing Lab",
+      2,
+      "2023-09-01",
+      "2024-09-01",
+      180000,
+      "completed",
+    ],
+    [
+      "PRJ-003",
+      "Neural Networks Study",
+      1,
+      "2023-06-01",
+      "2024-06-01",
+      85000,
+      "closed",
+    ],
+    [
+      "PRJ-004",
+      "AI Research Initiative",
+      3,
+      "2024-01-01",
+      "2025-01-01",
+      120000,
+      "active",
+    ],
+    [
+      "PRJ-005",
+      "Climate Study Analysis",
+      4,
+      "2023-11-01",
+      "2024-11-01",
+      75000,
+      "active",
+    ],
+    [
+      "PRJ-006",
+      "Robotics Engineering",
+      1,
+      "2024-02-01",
+      "2025-02-01",
+      95000,
+      "active",
+    ],
   ];
 
   for (const p of projects) {
@@ -295,16 +388,106 @@ async function seedData() {
   }
 
   const items = [
-    ["LI-001", "Grant Funding - NSF Award", 1, 2, "revenue", 50000, "2024-03-14", "approved"],
-    ["LI-002", "Software Licenses", 2, 1, "expense", 5000, "2024-03-12", "rejected"],
-    ["LI-003", "Equipment Maintenance", 1, 5, "expense", 3200, "2024-03-09", "pending"],
-    ["LI-004", "Equipment Maintenance", 3, 3, "revenue", 10000, "2024-03-28", "reimbursed"],
-    ["LI-005", "Lab Supplies", 4, 2, "expense", 2500, "2024-03-15", "pending"],
-    ["LI-006", "Conference Travel", 1, 1, "expense", 1800, "2024-03-10", "approved"],
-    ["LI-007", "Research Grant - DOE", 2, 5, "revenue", 75000, "2024-02-20", "approved"],
-    ["LI-008", "Equipment Purchase - Microscope", 1, 4, "expense", 15000, "2024-03-05", "pending"],
-    ["LI-009", "Personnel Reimbursement", 4, 3, "expense", 980, "2024-03-18", "reimbursed"],
-    ["LI-010", "Publication Fees", 3, 2, "expense", 500, "2024-03-22", "approved"],
+    [
+      "LI-001",
+      "Grant Funding - NSF Award",
+      1,
+      2,
+      "revenue",
+      50000,
+      "2024-03-14",
+      "approved",
+    ],
+    [
+      "LI-002",
+      "Software Licenses",
+      2,
+      1,
+      "expense",
+      5000,
+      "2024-03-12",
+      "rejected",
+    ],
+    [
+      "LI-003",
+      "Equipment Maintenance",
+      1,
+      5,
+      "expense",
+      3200,
+      "2024-03-09",
+      "pending",
+    ],
+    [
+      "LI-004",
+      "Equipment Maintenance",
+      3,
+      3,
+      "revenue",
+      10000,
+      "2024-03-28",
+      "reimbursed",
+    ],
+    [
+      "LI-005",
+      "Lab Supplies",
+      4,
+      2,
+      "expense",
+      2500,
+      "2024-03-15",
+      "pending",
+    ],
+    [
+      "LI-006",
+      "Conference Travel",
+      1,
+      1,
+      "expense",
+      1800,
+      "2024-03-10",
+      "approved",
+    ],
+    [
+      "LI-007",
+      "Research Grant - DOE",
+      2,
+      5,
+      "revenue",
+      75000,
+      "2024-02-20",
+      "approved",
+    ],
+    [
+      "LI-008",
+      "Equipment Purchase - Microscope",
+      1,
+      4,
+      "expense",
+      15000,
+      "2024-03-05",
+      "pending",
+    ],
+    [
+      "LI-009",
+      "Personnel Reimbursement",
+      4,
+      3,
+      "expense",
+      980,
+      "2024-03-18",
+      "reimbursed",
+    ],
+    [
+      "LI-010",
+      "Publication Fees",
+      3,
+      2,
+      "expense",
+      500,
+      "2024-03-22",
+      "approved",
+    ],
   ];
 
   for (const li of items) {
