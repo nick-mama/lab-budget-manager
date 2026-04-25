@@ -84,21 +84,11 @@ export function Navbar({ title, subtitle }: NavbarProps) {
     <header className="flex items-center justify-between border-b bg-white px-6 py-4">
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">{title}</h1>
-        {subtitle && (
-          <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
-        )}
+        {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
       </div>
 
       <div className="flex items-center gap-4">
         <GlobalSearch />
-
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setShowNotifications(!showNotifications)}
-        >
-          <Bell className="h-5 w-5" />
-        </Button>
       </div>
     </header>
   );
