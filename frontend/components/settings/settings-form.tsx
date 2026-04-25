@@ -19,19 +19,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { useCurrentUserStore } from "@/lib/current-user-store";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { useApi } from "@/lib/api-client";
 
-type UserRecord = {
-  id: number;
-  name: string;
-  email: string;
-  role: string;
-};
-
 export function SettingsForm() {
-  const { userId } = useCurrentUserStore();
   const { user: actingUser } = useCurrentUser();
   const { apiFetch } = useApi();
 
@@ -48,62 +39,25 @@ export function SettingsForm() {
   const [confirmPassword, setConfirmPassword] = useState("");
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function loadUser() {
-      if (!userId) {
-        setLoadingProfile(false);
-        return;
-      }
-
-      try {
-        setLoadingProfile(true);
-
-        const res = await apiFetch("/api/users");
-
-        if (!res.ok) {
-          throw new Error("Failed to load users");
-        }
-
-        const users = (await res.json()) as UserRecord[];
-        const currentUser = users.find((user) => user.id === userId);
-
-        if (!currentUser) {
-          throw new Error("User not found");
-        }
-
-        const parts = currentUser.name.trim().split(/\s+/);
-        const first = parts[0] ?? "";
-        const last = parts.slice(1).join(" ");
-
-        if (!cancelled) {
-          setFirstName(first);
-          setLastName(last);
-          setEmail(currentUser.email);
-          setRole(currentUser.role);
-        }
-      } catch (error) {
-        console.error(error);
-        if (!cancelled) {
-          toast.error("Failed to load profile");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoadingProfile(false);
-        }
-      }
+    if (!actingUser) {
+      setLoadingProfile(false);
+      return;
     }
 
-    loadUser();
+    const parts = actingUser.name.trim().split(/\s+/);
+    const first = parts[0] ?? "";
+    const last = parts.slice(1).join(" ");
 
-    return () => {
-      cancelled = true;
-    };
-  }, [userId, actingUser]);
+    setFirstName(first);
+    setLastName(last);
+    setEmail(actingUser.email);
+    setRole(actingUser.role);
+    setLoadingProfile(false);
+  }, [actingUser]);
 
   const profileDisabled = useMemo(
-    () => loadingProfile || savingProfile || !userId,
-    [loadingProfile, savingProfile, userId],
+    () => loadingProfile || savingProfile || !actingUser?.id,
+    [loadingProfile, savingProfile, actingUser],
   );
 
   const isFinancialAdmin = actingUser?.role === "Financial Admin";
@@ -111,8 +65,8 @@ export function SettingsForm() {
   async function handleSaveProfile(e: React.FormEvent) {
     e.preventDefault();
 
-    if (!userId) {
-      toast.error("No active user selected.");
+    if (!actingUser?.id) {
+      toast.error("No current user found.");
       return;
     }
 
@@ -129,7 +83,7 @@ export function SettingsForm() {
     try {
       setSavingProfile(true);
 
-      const res = await apiFetch(`/api/users/${userId}`, {
+      const res = await apiFetch(`/api/users/${actingUser.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -139,6 +93,7 @@ export function SettingsForm() {
           lastName: lastName.trim(),
           email: email.trim(),
           role,
+          username: actingUser.username,
         }),
       });
 
@@ -270,7 +225,7 @@ export function SettingsForm() {
             Security <i>(Demo only. Not functional.)</i>
           </CardTitle>
           <CardDescription>
-            Manage your account security settings.{" "}
+            Manage your account security settings.
           </CardDescription>
         </CardHeader>
 

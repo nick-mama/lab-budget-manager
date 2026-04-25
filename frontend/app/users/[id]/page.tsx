@@ -1,6 +1,10 @@
+"use client";
+
+import { use, useEffect, useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { UserRoleEditor } from "@/components/users/user-role-editor";
+import { useApi } from "@/lib/api-client";
 
 function getInitials(name: string) {
   return name
@@ -28,18 +32,72 @@ type UserProfile = {
   member_projects?: ProjectSummary[];
 };
 
-export default async function UserProfilePage({
+export default function UserProfilePage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { id } = await params;
+  const { apiFetch } = useApi();
+  const { id } = use(params);
 
-  const res = await fetch(`http://localhost:4000/api/users/${id}`, {
-    cache: "no-store",
-  });
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
 
-  if (!res.ok) {
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadUser() {
+      try {
+        setLoading(true);
+        setFailed(false);
+
+        const res = await apiFetch(`/api/users/${id}`);
+
+        if (!res.ok) {
+          throw new Error("Failed to load user");
+        }
+
+        const data = (await res.json()) as UserProfile;
+
+        if (!cancelled) {
+          setUser(data);
+        }
+      } catch (error) {
+        console.error(error);
+
+        if (!cancelled) {
+          setFailed(true);
+          setUser(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadUser();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [apiFetch, id]);
+
+  if (loading) {
+    return (
+      <DashboardLayout title="User Profile" subtitle="View member information.">
+        <div className="rounded-lg border bg-card p-6">
+          <h2 className="text-xl font-semibold">Loading user...</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Please wait while we load that profile.
+          </p>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (failed || !user) {
     return (
       <DashboardLayout title="User Profile" subtitle="View member information.">
         <div className="rounded-lg border bg-card p-6">
@@ -51,8 +109,6 @@ export default async function UserProfilePage({
       </DashboardLayout>
     );
   }
-
-  const user = (await res.json()) as UserProfile;
 
   return (
     <DashboardLayout
