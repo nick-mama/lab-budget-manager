@@ -47,6 +47,7 @@ export function SettingsForm() {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
 
   useEffect(() => {
     if (!actingUser) {
@@ -146,23 +147,25 @@ export function SettingsForm() {
   async function handleUpdatePassword(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
+    setPasswordError("");
+
     if (!actingUser?.id) {
-      toast.error("No current user found.");
+      setPasswordError("No current user found.");
       return;
     }
 
     if (!currentPassword || !newPassword || !confirmPassword) {
-      toast.error("Please fill out all password fields.");
+      setPasswordError("Please fill out all password fields.");
       return;
     }
 
     if (newPassword.length < 8) {
-      toast.error("New password must be at least 8 characters.");
+      setPasswordError("New password must be at least 8 characters.");
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      toast.error("New passwords do not match.");
+      setPasswordError("New passwords do not match.");
       return;
     }
 
@@ -182,25 +185,21 @@ export function SettingsForm() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        throw new Error(data?.error || "Failed to update password");
+        setPasswordError(data?.error || "Failed to update password.");
+        return;
       }
 
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      setShowCurrentPassword(false);
-      setShowNewPassword(false);
-      setShowConfirmPassword(false);
+      setPasswordError("");
 
       toast.success("Password updated. Please sign in again.");
 
       logout();
       router.push("/login");
-    } catch (error) {
-      console.error(error);
-      toast.error(
-        error instanceof Error ? error.message : "Failed to update password.",
-      );
+    } catch {
+      setPasswordError("Network error. Please try again.");
     } finally {
       setSavingPassword(false);
     }
@@ -323,9 +322,7 @@ export function SettingsForm() {
                 />
                 <button
                   type="button"
-                  onClick={() =>
-                    setShowCurrentPassword((prev) => !prev)
-                  }
+                  onClick={() => setShowCurrentPassword((prev) => !prev)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   disabled={passwordDisabled}
                   aria-label={
@@ -389,9 +386,7 @@ export function SettingsForm() {
                 />
                 <button
                   type="button"
-                  onClick={() =>
-                    setShowConfirmPassword((prev) => !prev)
-                  }
+                  onClick={() => setShowConfirmPassword((prev) => !prev)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   disabled={passwordDisabled}
                   aria-label={
@@ -408,6 +403,10 @@ export function SettingsForm() {
                 </button>
               </div>
             </div>
+
+            {passwordError ? (
+              <p className="text-sm text-red-600">{passwordError}</p>
+            ) : null}
 
             <Button
               type="submit"

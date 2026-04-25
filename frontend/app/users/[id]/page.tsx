@@ -4,7 +4,6 @@ import { use, useEffect, useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { UserRoleEditor } from "@/components/users/user-role-editor";
-import { UserRoleManagementCard } from "@/components/users/user-role-management-card";
 import { useApi } from "@/lib/api-client";
 
 function getInitials(name: string) {
@@ -43,7 +42,7 @@ export default function UserProfilePage({
 
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -51,12 +50,28 @@ export default function UserProfilePage({
     async function loadUser() {
       try {
         setLoading(true);
-        setFailed(false);
+        setErrorMessage("");
 
         const res = await apiFetch(`/api/users/${id}`);
 
         if (!res.ok) {
-          throw new Error("Failed to load user");
+          if (res.status === 401) {
+            setErrorMessage("You are not authorized. Please sign in again.");
+            return;
+          }
+
+          if (res.status === 403) {
+            setErrorMessage("You do not have permission to view this user.");
+            return;
+          }
+
+          if (res.status === 404) {
+            setErrorMessage("User not found.");
+            return;
+          }
+
+          setErrorMessage("Failed to load user.");
+          return;
         }
 
         const data = (await res.json()) as UserProfile;
@@ -64,12 +79,9 @@ export default function UserProfilePage({
         if (!cancelled) {
           setUser(data);
         }
-      } catch (error) {
-        console.error(error);
-
+      } catch {
         if (!cancelled) {
-          setFailed(true);
-          setUser(null);
+          setErrorMessage("Network error. Please try again.");
         }
       } finally {
         if (!cancelled) {
@@ -91,20 +103,20 @@ export default function UserProfilePage({
         <div className="rounded-lg border bg-card p-6">
           <h2 className="text-xl font-semibold">Loading user...</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Please wait while we load that profile.
+            Please wait while we load that user profile.
           </p>
         </div>
       </DashboardLayout>
     );
   }
 
-  if (failed || !user) {
+  if (!user) {
     return (
       <DashboardLayout title="User Profile" subtitle="View member information.">
         <div className="rounded-lg border bg-card p-6">
-          <h2 className="text-xl font-semibold">User not found</h2>
+          <h2 className="text-xl font-semibold">Could not load user</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            We could not load that user profile.
+            {errorMessage || "We could not load that user profile."}
           </p>
         </div>
       </DashboardLayout>
@@ -151,12 +163,19 @@ export default function UserProfilePage({
         </Card>
       </div>
 
-      <UserRoleManagementCard
-        userId={user.id}
-        name={user.name}
-        email={user.email}
-        currentRole={user.role}
-      />
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Role Management</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <UserRoleEditor
+            userId={user.id}
+            name={user.name}
+            email={user.email}
+            currentRole={user.role}
+          />
+        </CardContent>
+      </Card>
 
       <Card className="mt-6">
         <CardHeader>

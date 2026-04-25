@@ -62,73 +62,66 @@ router.get("/", requireUser, async (req, res) => {
   }
 });
 
-router.put("/:id", requireUser, async (req, res) => {
+router.get("/:id", requireUser, async (req, res) => {
   try {
     const targetUserId = Number(req.params.id);
-    const { firstName, lastName, email, role, username } = req.body;
 
-    if (!firstName || !lastName || !email || !username) {
-      return res.status(400).json({
-        error: "firstName, lastName, email, and username are required",
-      });
+    if (!Number.isFinite(targetUserId) || targetUserId <= 0) {
+      return res.status(400).json({ error: "invalid user id" });
     }
 
-    const isFinancialAdmin = req.user.role === "Financial Admin";
-    const isSelf = Number(req.user.id) === targetUserId;
-
-    if (!isFinancialAdmin && !isSelf) {
-      return res.status(403).json({ error: "forbidden" });
-    }
-
-    const existingUser = await get(
-      "SELECT id, role FROM users WHERE id = ?",
-      [targetUserId],
-    );
-
-    if (!existingUser) {
-      return res.status(404).json({ error: "user not found" });
-    }
-
-    const emailOwner = await get(
-      "SELECT id FROM users WHERE email = ? AND id != ?",
-      [email.trim(), targetUserId],
-    );
-
-    if (emailOwner) {
-      return res.status(400).json({ error: "email already exists" });
-    }
-
-    const usernameOwner = await get(
-      "SELECT id FROM users WHERE username = ? AND id != ?",
-      [username.trim(), targetUserId],
-    );
-
-    if (usernameOwner) {
-      return res.status(400).json({ error: "username already exists" });
-    }
-
-    const fullName = `${firstName} ${lastName}`.trim();
-    const nextRole = isFinancialAdmin ? role : existingUser.role;
-
-    await run(
+    const user = await get(
       `
-      UPDATE users
-      SET name = ?, email = ?, role = ?, username = ?
-      WHERE id = ?
-      `,
-      [fullName, email.trim(), nextRole, username.trim(), targetUserId],
-    );
-
-    const updatedUser = await get(
-      `
-      SELECT id, name, email, role, avatar, username
+      SELECT
+        id,
+        name,
+        email,
+        role,
+        avatar,
+        username
       FROM users
       WHERE id = ?
       `,
       [targetUserId],
     );
 
-    res.json(updatedUser);
+    if (!user) {
+      return res.status(404).json({ error: "user not found" });
+    }
+
+    const managedProjects = await all(
+      `
+      SELECT
+        p.id,
+        p.name,
+        p.project_code
+      FROM projects p
+      WHERE p.manager_id = ?
+      ORDER BY p.name ASC
+      `,
+      [targetUserId],
+    );
+
+    const memberProjects = await all(
+      `
+      SELECT
+        p.id,
+        p.name,
+        p.project_code
+      FROM project_users pu
+      JOIN projects p ON p.id = pu.project_id
+      WHERE pu.user_id = ?
+        AND p.manager_id != ?
+      ORDER BY p.name ASC
+      `,
+      [targetUserId, targetUserId],
+    );
+
+    res.json({
+      ...user,
+      managed_projects: managedProjects,
+      member_projects: memberProjects,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -143,12 +136,12 @@ router.put("/:id/password", requireUser, async (req, res) => {
     const isSelf = Number(req.user.id) === targetUserId;
 
     if (!isFinancialAdmin && !isSelf) {
-      return res.status(403).json({ error: "forbidden" });
+      return res.status(403).json({ error: "Forbidden" });
     }
 
     if (!newPassword || newPassword.length < 8) {
       return res.status(400).json({
-        error: "new password must be at least 8 characters",
+        error: "New password must be at least 8 characters",
       });
     }
 
@@ -158,20 +151,20 @@ router.put("/:id/password", requireUser, async (req, res) => {
     );
 
     if (!user) {
-      return res.status(404).json({ error: "user not found" });
+      return res.status(404).json({ error: "User not found" });
     }
 
     if (isSelf) {
       if (!currentPassword) {
         return res.status(400).json({
-          error: "currentPassword is required",
+          error: "CurrentPassword is required",
         });
       }
 
       const matches = await bcrypt.compare(currentPassword, user.password_hash);
 
       if (!matches) {
-        return res.status(401).json({ error: "current password is incorrect" });
+        return res.status(401).json({ error: "Current password is incorrect" });
       }
     }
 
@@ -195,17 +188,17 @@ router.delete("/:id", requireRole(["Financial Admin"]), async (req, res) => {
     const targetUserId = Number(req.params.id);
 
     if (!Number.isFinite(targetUserId) || targetUserId <= 0) {
-      return res.status(400).json({ error: "invalid user id" });
+      return res.status(400).json({ error: "Invalid user id" });
     }
 
     if (Number(req.user.id) === targetUserId) {
-      return res.status(400).json({ error: "cannot remove the active user" });
+      return res.status(400).json({ error: "Cannot remove the active user" });
     }
 
     const user = await get("SELECT id FROM users WHERE id = ?", [targetUserId]);
 
     if (!user) {
-      return res.status(404).json({ error: "user not found" });
+      return res.status(404).json({ error: "User not found" });
     }
 
     const managedProjects = await get(
@@ -215,7 +208,7 @@ router.delete("/:id", requireRole(["Financial Admin"]), async (req, res) => {
 
     if (Number(managedProjects?.count ?? 0) > 0) {
       return res.status(400).json({
-        error: "cannot remove a user who is still assigned as a project manager",
+        error: "Cannot remove a user who is still assigned as a project manager",
       });
     }
 
@@ -231,7 +224,7 @@ router.delete("/:id", requireRole(["Financial Admin"]), async (req, res) => {
 
     if (Number(referencedLineItems?.count ?? 0) > 0) {
       return res.status(400).json({
-        error: "cannot remove a user who is referenced by line items",
+        error: "Cannot remove a user who is referenced by line items",
       });
     }
 
@@ -239,7 +232,7 @@ router.delete("/:id", requireRole(["Financial Admin"]), async (req, res) => {
     await run("DELETE FROM project_users WHERE user_id = ?", [targetUserId]);
     await run("DELETE FROM users WHERE id = ?", [targetUserId]);
 
-    res.json({ message: "user removed" });
+    res.json({ message: "User removed" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -260,7 +253,7 @@ router.post("/", requireRole(["Financial Admin"]), async (req, res) => {
     ]);
 
     if (existingEmail) {
-      return res.status(400).json({ error: "email already exists" });
+      return res.status(400).json({ error: "Email already exists" });
     }
 
     const existingUsername = await get(
@@ -269,7 +262,7 @@ router.post("/", requireRole(["Financial Admin"]), async (req, res) => {
     );
 
     if (existingUsername) {
-      return res.status(400).json({ error: "username already exists" });
+      return res.status(400).json({ error: "Username already exists" });
     }
 
     const avatar = String(name)
