@@ -1,7 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   FolderKanban,
@@ -36,7 +37,18 @@ function getInitials(name: string) {
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { user, logout } = useAuth();
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!user) {
+      router.push("/login");
+    }
+  }, [user, router]);
+
+  // Prevent UI flash before redirect
+  if (!user) return null;
 
   const activeUser = user;
 
@@ -80,15 +92,15 @@ export function Sidebar() {
       <div className="border-t border-sidebar-border p-4">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-medium text-accent-foreground">
-            {activeUser ? getInitials(activeUser.name) : "--"}
+            {getInitials(activeUser.name)}
           </div>
 
           <div className="flex-1">
             <p className="text-sm font-medium text-primary-foreground">
-              {activeUser?.name ?? "Unknown User"}
+              {activeUser.name}
             </p>
             <p className="text-xs text-primary-foreground/70">
-              {activeUser?.role ?? ""}
+              {activeUser.role}
             </p>
           </div>
 
