@@ -2,7 +2,7 @@
   "name": "lab-budget-manager",
   "version": "1.0.0",
   "scripts": {
-    "clean": "rimraf node_modules frontend/node_modules backend/node_modules",
+    "clean": "node -e \"const fs=require('fs'); ['node_modules','frontend/node_modules','backend/node_modules'].forEach(p=>fs.rmSync(p,{recursive:true,force:true}))\"",
     "install:all": "npm install && npm --prefix frontend install && npm --prefix backend install",
     "reinstall": "npm run clean && npm run install:all",
     "dev": "concurrently \"npm --prefix frontend run dev\" \"npm --prefix backend run dev\""
