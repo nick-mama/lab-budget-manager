@@ -20,8 +20,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Plus, Search } from "lucide-react";
-import { useCurrentUserStore } from "@/lib/current-user-store";
 import { useApi } from "@/lib/api-client";
+import { useCurrentUser } from "@/hooks/use-current-user";
 
 type Role = "Researcher" | "Lab Manager" | "Financial Admin";
 
@@ -30,25 +30,14 @@ type Props = {
   onCreated?: () => void;
 };
 
-type CurrentUserResponse = {
-  id: number;
-  name: string;
-  email: string;
-  role: string;
-};
-
 export function UsersHeader({ onFiltersChange, onCreated }: Props) {
-  const { userId } = useCurrentUserStore();
   const { apiFetch } = useApi();
+  const { user } = useCurrentUser();
 
   const [open, setOpen] = React.useState(false);
 
   const [search, setSearch] = React.useState("");
   const [role, setRole] = React.useState("all");
-
-  const [currentUserRole, setCurrentUserRole] = React.useState<string | null>(
-    null,
-  );
 
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
@@ -60,39 +49,7 @@ export function UsersHeader({ onFiltersChange, onCreated }: Props) {
     onFiltersChange?.({ search, role });
   }, [search, role, onFiltersChange]);
 
-  React.useEffect(() => {
-    if (!userId) {
-      setCurrentUserRole(null);
-      return;
-    }
-
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const res = await apiFetch(`/api/users/${userId}`);
-
-        if (!res.ok) {
-          throw new Error("Failed to load active user");
-        }
-
-        const u = (await res.json()) as CurrentUserResponse;
-
-        if (!cancelled) {
-          setCurrentUserRole(u.role ?? null);
-        }
-      } catch {
-        if (!cancelled) {
-          setCurrentUserRole(null);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [userId]);
-
+  const currentUserRole = user?.role ?? null;
   const canCreate = currentUserRole === "Financial Admin";
 
   function resetForm() {
@@ -106,8 +63,8 @@ export function UsersHeader({ onFiltersChange, onCreated }: Props) {
   async function handleCreate() {
     setError(null);
 
-    if (!userId) {
-      setError("Choose an active user in the top bar first.");
+    if (!user?.id) {
+      setError("You must be logged in first.");
       return;
     }
 
@@ -144,9 +101,6 @@ export function UsersHeader({ onFiltersChange, onCreated }: Props) {
       } catch {
         body = {};
       }
-
-      console.log("CREATE USER STATUS:", res.status);
-      console.log("CREATE USER RESPONSE:", body || text);
 
       if (!res.ok) {
         throw new Error(
@@ -196,24 +150,42 @@ export function UsersHeader({ onFiltersChange, onCreated }: Props) {
       <Dialog
         open={open}
         onOpenChange={(next) => {
+          if (!canCreate || !user?.id) {
+            setOpen(false);
+            return;
+          }
+
           setOpen(next);
           if (!next) resetForm();
         }}
       >
-        <Button
-          className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
-          type="button"
-          onClick={() => setOpen(true)}
-        >
-          <Plus className="h-4 w-4" />
-          Add Member
-        </Button>
+        {canCreate ? (
+          <Button
+            className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
+            type="button"
+            onClick={() => setOpen(true)}
+          >
+            <Plus className="h-4 w-4" />
+            Add Member
+          </Button>
+        ) : (
+          <div title="Insufficient permissions">
+            <Button
+              className="gap-2 bg-primary text-primary-foreground opacity-50"
+              type="button"
+              disabled
+            >
+              <Plus className="h-4 w-4" />
+              Add Member
+            </Button>
+          </div>
+        )}
 
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Add team member</DialogTitle>
             <DialogDescription>
-              Creating users requires an active Financial Admin user.
+              Creating users requires a Financial Admin account.
             </DialogDescription>
           </DialogHeader>
 
@@ -223,13 +195,13 @@ export function UsersHeader({ onFiltersChange, onCreated }: Props) {
             </p>
           ) : null}
 
-          {!userId ? (
+          {!user?.id ? (
             <p className="text-muted-foreground text-sm">
-              Pick an active user in the top bar to enable API actions.
+              Please sign in to enable API actions.
             </p>
           ) : null}
 
-          {userId && !canCreate ? (
+          {user?.id && !canCreate ? (
             <p className="text-muted-foreground text-sm">
               Current role:{" "}
               <span className="font-medium text-foreground">
@@ -294,7 +266,7 @@ export function UsersHeader({ onFiltersChange, onCreated }: Props) {
             <Button
               type="button"
               onClick={handleCreate}
-              disabled={submitting || !canCreate || !userId}
+              disabled={submitting || !canCreate || !user?.id}
             >
               {submitting ? "Saving…" : "Create member"}
             </Button>
