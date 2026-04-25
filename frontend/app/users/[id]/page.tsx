@@ -4,6 +4,7 @@ import { use, useEffect, useState } from "react";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { UserRoleEditor } from "@/components/users/user-role-editor";
+import { UserRoleManagementCard } from "@/components/users/user-role-management-card";
 import { useApi } from "@/lib/api-client";
 
 function getInitials(name: string) {
@@ -150,19 +151,12 @@ export default function UserProfilePage({
         </Card>
       </div>
 
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>Role Management</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <UserRoleEditor
-            userId={user.id}
-            name={user.name}
-            email={user.email}
-            currentRole={user.role}
-          />
-        </CardContent>
-      </Card>
+      <UserRoleManagementCard
+        userId={user.id}
+        name={user.name}
+        email={user.email}
+        currentRole={user.role}
+      />
 
       <Card className="mt-6">
         <CardHeader>
