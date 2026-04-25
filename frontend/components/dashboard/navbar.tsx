@@ -92,26 +92,6 @@ export function Navbar({ title, subtitle }: NavbarProps) {
       <div className="flex items-center gap-4">
         <GlobalSearch />
 
-        <div className="flex items-center gap-2">
-          <Label className="text-sm text-slate-600">Active user</Label>
-          <Select
-            value={String(currentUser?.id ?? user?.id ?? "")}
-            disabled
-            onValueChange={() => {}}
-          >
-            <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder={loadingUsers ? "Loading..." : "User"} />
-            </SelectTrigger>
-            <SelectContent>
-              {users.map((u) => (
-                <SelectItem key={u.id} value={String(u.id)}>
-                  {u.name} ({u.role})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
         <Button
           variant="ghost"
           size="icon"

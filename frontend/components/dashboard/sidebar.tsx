@@ -1,9 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useCurrentUserStore } from "@/lib/current-user-store";
 import {
   LayoutDashboard,
   FolderKanban,
@@ -15,7 +13,6 @@ import {
   FlaskConical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useApi } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth";
 
 const navigation = [
@@ -26,13 +23,6 @@ const navigation = [
   { name: "Users", href: "/users", icon: Users },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
-
-type UserRecord = {
-  id: number;
-  name: string;
-  email: string;
-  role: string;
-};
 
 function getInitials(name: string) {
   return name
@@ -46,49 +36,7 @@ function getInitials(name: string) {
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { userId } = useCurrentUserStore();
-  const { apiFetch } = useApi();
   const { user, logout } = useAuth();
-
-  const [users, setUsers] = useState<UserRecord[]>([]);
-  const [loadingUsers, setLoadingUsers] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadUsers() {
-      try {
-        setLoadingUsers(true);
-
-        const res = await apiFetch("/api/users");
-
-        if (!res.ok) {
-          throw new Error("Failed to load users");
-        }
-
-        const data = (await res.json()) as UserRecord[];
-
-        if (!cancelled) {
-          setUsers(Array.isArray(data) ? data : []);
-        }
-      } catch (error) {
-        console.error(error);
-        if (!cancelled) {
-          setUsers([]);
-        }
-      } finally {
-        if (!cancelled) {
-          setLoadingUsers(false);
-        }
-      }
-    }
-
-    loadUsers();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const activeUser = user;
 
@@ -137,14 +85,17 @@ export function Sidebar() {
 
           <div className="flex-1">
             <p className="text-sm font-medium text-primary-foreground">
-              {loadingUsers ? "Loading..." : (activeUser?.name ?? "Unknown User")}
+              {activeUser?.name ?? "Unknown User"}
             </p>
             <p className="text-xs text-primary-foreground/70">
               {activeUser?.role ?? ""}
             </p>
           </div>
 
-          <button className="rounded-lg p-2 text-primary-foreground/70 hover:bg-primary-foreground/10 hover:text-primary-foreground">
+          <button
+            onClick={logout}
+            className="rounded-lg p-2 text-primary-foreground/70 hover:bg-primary-foreground/10 hover:text-primary-foreground"
+          >
             <LogOut className="h-4 w-4" />
           </button>
         </div>
