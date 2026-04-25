@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -18,16 +19,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { useApi } from "@/lib/api-client";
+import { useAuth } from "@/lib/auth";
 
 export function SettingsForm() {
+  const router = useRouter();
   const { user: actingUser } = useCurrentUser();
   const { apiFetch } = useApi();
+  const { token, setAuth, logout } = useAuth();
 
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -37,6 +43,10 @@ export function SettingsForm() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   useEffect(() => {
     if (!actingUser) {
@@ -60,7 +70,25 @@ export function SettingsForm() {
     [loadingProfile, savingProfile, actingUser],
   );
 
+  const passwordDisabled = useMemo(
+    () => savingPassword || !actingUser?.id,
+    [savingPassword, actingUser],
+  );
+
   const isFinancialAdmin = actingUser?.role === "Financial Admin";
+
+  async function refreshCurrentUser() {
+    if (!token) return;
+
+    const meRes = await apiFetch("/api/auth/me");
+
+    if (!meRes.ok) {
+      throw new Error("Failed to refresh current user");
+    }
+
+    const updatedUser = await meRes.json();
+    setAuth(token, updatedUser);
+  }
 
   async function handleSaveProfile(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -98,24 +126,38 @@ export function SettingsForm() {
       });
 
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || "Failed to update profile");
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || "Failed to update profile");
       }
+
+      await refreshCurrentUser();
 
       toast.success("Profile updated successfully.");
     } catch (error) {
       console.error(error);
-      toast.error("Failed to update profile.");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to update profile.",
+      );
     } finally {
       setSavingProfile(false);
     }
   }
 
-  function handleUpdatePassword(e: React.FormEvent<HTMLFormElement>) {
+  async function handleUpdatePassword(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+
+    if (!actingUser?.id) {
+      toast.error("No current user found.");
+      return;
+    }
 
     if (!currentPassword || !newPassword || !confirmPassword) {
       toast.error("Please fill out all password fields.");
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      toast.error("New password must be at least 8 characters.");
       return;
     }
 
@@ -124,7 +166,44 @@ export function SettingsForm() {
       return;
     }
 
-    toast.message("Password update is not connected yet.");
+    try {
+      setSavingPassword(true);
+
+      const res = await apiFetch(`/api/users/${actingUser.id}/password`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          currentPassword,
+          newPassword,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || "Failed to update password");
+      }
+
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setShowCurrentPassword(false);
+      setShowNewPassword(false);
+      setShowConfirmPassword(false);
+
+      toast.success("Password updated. Please sign in again.");
+
+      logout();
+      router.push("/login");
+    } catch (error) {
+      console.error(error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to update password.",
+      );
+    } finally {
+      setSavingPassword(false);
+    }
   }
 
   return (
@@ -221,9 +300,7 @@ export function SettingsForm() {
 
       <Card className="bg-card">
         <CardHeader>
-          <CardTitle className="text-foreground">
-            Security <i>(Demo only. Not functional.)</i>
-          </CardTitle>
+          <CardTitle className="text-foreground">Security</CardTitle>
           <CardDescription>
             Manage your account security settings.
           </CardDescription>
@@ -235,46 +312,109 @@ export function SettingsForm() {
               <Label htmlFor="currentPassword" className="text-foreground">
                 Current Password
               </Label>
-              <Input
-                id="currentPassword"
-                type="password"
-                className="bg-secondary"
-                value={currentPassword}
-                disabled
-                onChange={(e) => setCurrentPassword(e.target.value)}
-              />
+              <div className="relative">
+                <Input
+                  id="currentPassword"
+                  type={showCurrentPassword ? "text" : "password"}
+                  className="bg-secondary pr-10"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  disabled={passwordDisabled}
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    setShowCurrentPassword((prev) => !prev)
+                  }
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  disabled={passwordDisabled}
+                  aria-label={
+                    showCurrentPassword
+                      ? "Hide current password"
+                      : "Show current password"
+                  }
+                >
+                  {showCurrentPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="newPassword" className="text-foreground">
                 New Password
               </Label>
-              <Input
-                id="newPassword"
-                type="password"
-                className="bg-secondary"
-                value={newPassword}
-                disabled
-                onChange={(e) => setNewPassword(e.target.value)}
-              />
+              <div className="relative">
+                <Input
+                  id="newPassword"
+                  type={showNewPassword ? "text" : "password"}
+                  className="bg-secondary pr-10"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  disabled={passwordDisabled}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword((prev) => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  disabled={passwordDisabled}
+                  aria-label={
+                    showNewPassword ? "Hide new password" : "Show new password"
+                  }
+                >
+                  {showNewPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="confirmPassword" className="text-foreground">
                 Confirm New Password
               </Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                className="bg-secondary"
-                value={confirmPassword}
-                disabled
-                onChange={(e) => setConfirmPassword(e.target.value)}
-              />
+              <div className="relative">
+                <Input
+                  id="confirmPassword"
+                  type={showConfirmPassword ? "text" : "password"}
+                  className="bg-secondary pr-10"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  disabled={passwordDisabled}
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    setShowConfirmPassword((prev) => !prev)
+                  }
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  disabled={passwordDisabled}
+                  aria-label={
+                    showConfirmPassword
+                      ? "Hide confirm password"
+                      : "Show confirm password"
+                  }
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
             </div>
 
-            <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
-              Update Password
+            <Button
+              type="submit"
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
+              disabled={passwordDisabled}
+            >
+              {savingPassword ? "Updating..." : "Update Password"}
             </Button>
           </form>
         </CardContent>

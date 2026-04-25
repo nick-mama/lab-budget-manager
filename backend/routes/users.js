@@ -62,59 +62,6 @@ router.get("/", requireUser, async (req, res) => {
   }
 });
 
-router.get("/:id", requireUser, async (req, res) => {
-  try {
-    const user = await get(
-      `
-      SELECT ${PUBLIC_USER_FIELDS}
-      FROM users
-      WHERE id = ?
-      `,
-      [req.params.id],
-    );
-
-    if (!user) {
-      return res.status(404).json({ error: "user not found" });
-    }
-
-    const managedProjects = await all(
-      `
-      SELECT
-        p.id,
-        p.name,
-        p.project_code
-      FROM projects p
-      WHERE p.manager_id = ?
-      ORDER BY p.name ASC
-      `,
-      [req.params.id],
-    );
-
-    const memberProjects = await all(
-      `
-      SELECT
-        p.id,
-        p.name,
-        p.project_code
-      FROM project_users pu
-      JOIN projects p ON p.id = pu.project_id
-      WHERE pu.user_id = ?
-        AND p.manager_id != ?
-      ORDER BY p.name ASC
-      `,
-      [req.params.id, req.params.id],
-    );
-
-    res.json({
-      ...user,
-      managed_projects: managedProjects,
-      member_projects: memberProjects,
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 router.put("/:id", requireUser, async (req, res) => {
   try {
     const targetUserId = Number(req.params.id);
@@ -173,7 +120,11 @@ router.put("/:id", requireUser, async (req, res) => {
     );
 
     const updatedUser = await get(
-      `SELECT ${PUBLIC_USER_FIELDS} FROM users WHERE id = ?`,
+      `
+      SELECT id, name, email, role, avatar, username
+      FROM users
+      WHERE id = ?
+      `,
       [targetUserId],
     );
 
