@@ -6,14 +6,7 @@ const { requireUser } = require("../middleware/auth");
 
 const router = express.Router();
 
-const PUBLIC_USER_FIELDS = `
-  id,
-  name,
-  email,
-  role,
-  avatar,
-  username
-`;
+const SALT_ROUNDS = 12;
 
 router.post("/login", async (req, res) => {
   try {
@@ -65,6 +58,66 @@ router.post("/login", async (req, res) => {
         username: user.username,
       },
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/signup", async (req, res) => {
+  try {
+    const { name, email, username, password, role } = req.body;
+
+    if (!name || !email || !username || !password || !role) {
+      return res.status(400).json({
+        error: "name, email, username, password, and role are required",
+      });
+    }
+
+    const existingEmail = await get("SELECT id FROM users WHERE email = ?", [
+      email.trim(),
+    ]);
+
+    if (existingEmail) {
+      return res.status(400).json({ error: "email already exists" });
+    }
+
+    const existingUsername = await get(
+      "SELECT id FROM users WHERE username = ?",
+      [username.trim()],
+    );
+
+    if (existingUsername) {
+      return res.status(400).json({ error: "username already exists" });
+    }
+
+    const avatar = String(name)
+      .trim()
+      .split(/\s+/)
+      .map((part) => part[0] || "")
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+
+    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+
+    const result = await run(
+      `
+      INSERT INTO users (name, email, role, avatar, username, password_hash)
+      VALUES (?, ?, ?, ?, ?, ?)
+      `,
+      [name.trim(), email.trim(), role, avatar || "U", username.trim(), passwordHash],
+    );
+
+    const createdUser = await get(
+      `
+      SELECT id, name, email, role, avatar, username
+      FROM users
+      WHERE id = ?
+      `,
+      [result.lastInsertRowid],
+    );
+
+    res.status(201).json(createdUser);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
