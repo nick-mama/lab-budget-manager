@@ -183,7 +183,6 @@ export default function SignUpPage() {
               >
                 <option value="Researcher">Researcher</option>
                 <option value="Lab Manager">Lab Manager</option>
-                <option value="Financial Admin">Financial Admin</option>
               </select>
             </div>
 
