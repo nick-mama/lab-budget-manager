@@ -62,7 +62,7 @@ export function SettingsForm() {
 
   const isFinancialAdmin = actingUser?.role === "Financial Admin";
 
-  async function handleSaveProfile(e: React.FormEvent) {
+  async function handleSaveProfile(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
     if (!actingUser?.id) {
@@ -111,7 +111,7 @@ export function SettingsForm() {
     }
   }
 
-  function handleUpdatePassword(e: React.FormEvent) {
+  function handleUpdatePassword(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
     if (!currentPassword || !newPassword || !confirmPassword) {
