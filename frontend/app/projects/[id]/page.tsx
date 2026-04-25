@@ -1,6 +1,12 @@
+"use client";
+
+import { use, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/dashboard/status-badge";
+import { Button } from "@/components/ui/button";
+import { useApi } from "@/lib/api-client";
 
 type ProjectStatus = "active" | "completed" | "closed";
 
@@ -9,6 +15,30 @@ type Researcher = {
   name: string;
   email: string;
   role: string;
+};
+
+type LineItem = {
+  id: number;
+  description: string;
+  item_code: string;
+  requestor_name: string;
+  type: string;
+  amount: number;
+  status: string;
+};
+
+type ProjectDetails = {
+  id: number;
+  name: string;
+  project_code: string;
+  manager_name: string;
+  start_date: string;
+  end_date: string;
+  status: string;
+  budget: number;
+  spent: number;
+  researchers?: Researcher[];
+  line_items?: LineItem[];
 };
 
 function normalizeStatus(s: string): ProjectStatus {
@@ -34,34 +64,114 @@ function formatDate(value: string) {
   });
 }
 
-export default async function ProjectDetailsPage({
+export default function ProjectDetailsPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { id } = await params;
+  const { id } = use(params);
+  const router = useRouter();
+  const { apiFetch } = useApi();
 
-  const res = await fetch(`http://localhost:4000/api/projects/${id}`, {
-    cache: "no-store",
-  });
+  const [project, setProject] = useState<ProjectDetails | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [statusCode, setStatusCode] = useState<number | null>(null);
 
-  if (!res.ok) {
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProject() {
+      try {
+        setLoading(true);
+        setStatusCode(null);
+
+        const res = await apiFetch(`/api/projects/${id}`);
+
+        if (!res.ok) {
+          if (!cancelled) {
+            setProject(null);
+            setStatusCode(res.status);
+          }
+          return;
+        }
+
+        const data = (await res.json()) as ProjectDetails;
+
+        if (!cancelled) {
+          setProject(data);
+        }
+      } catch (error) {
+        console.error(error);
+        if (!cancelled) {
+          setProject(null);
+          setStatusCode(500);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadProject();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [apiFetch, id]);
+
+  if (loading) {
     return (
       <DashboardLayout
         title="Project Details"
         subtitle="View project information and budget activity."
       >
         <div className="rounded-lg border bg-card p-6">
-          <h2 className="text-xl font-semibold">Project not found</h2>
+          <h2 className="text-xl font-semibold">Loading project...</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            We could not load that project.
+            Please wait while we load that project.
           </p>
         </div>
       </DashboardLayout>
     );
   }
 
-  const project = await res.json();
+  if (!project) {
+    const title =
+      statusCode === 401
+        ? "Unauthorized"
+        : statusCode === 403
+          ? "Access denied"
+          : "Project not found";
+
+    const message =
+      statusCode === 401
+        ? "Please sign in again to view this project."
+        : statusCode === 403
+          ? "You do not have permission to view this project."
+          : "We could not load that project.";
+
+    return (
+      <DashboardLayout
+        title="Project Details"
+        subtitle="View project information and budget activity."
+      >
+        <div className="rounded-lg border bg-card p-6">
+          <h2 className="text-xl font-semibold">{title}</h2>
+          <p className="mt-2 text-sm text-muted-foreground">{message}</p>
+
+          <div className="mt-4">
+            <Button
+              variant="outline"
+              onClick={() => router.push("/projects")}
+            >
+              Back to Projects
+            </Button>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout
@@ -150,7 +260,7 @@ export default async function ProjectDetailsPage({
             </p>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {project.researchers.map((researcher: Researcher) => (
+              {project.researchers.map((researcher) => (
                 <div key={researcher.id} className="rounded-lg border p-4">
                   <p className="font-medium text-foreground">
                     {researcher.name}
@@ -179,7 +289,7 @@ export default async function ProjectDetailsPage({
             </p>
           ) : (
             <div className="space-y-3">
-              {project.line_items.map((item: any) => (
+              {project.line_items.map((item) => (
                 <div
                   key={item.id}
                   className="flex items-center justify-between rounded-lg border p-4"

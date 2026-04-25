@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -28,6 +29,7 @@ import {
   canViewProject,
 } from "@/lib/permissions";
 import { useApi } from "@/lib/api-client";
+import EditProjectForm from "@/app/projects/[id]/edit/edit-project-form";
 
 function formatUsd(n: number) {
   return new Intl.NumberFormat("en-US", {
@@ -48,16 +50,21 @@ interface ProjectsTableProps {
   projects: ApiProject[];
   setProjects: React.Dispatch<React.SetStateAction<ApiProject[]>>;
   loading?: boolean;
+  onRefresh?: () => void;
 }
 
 export function ProjectsTable({
   projects,
   setProjects,
   loading,
+  onRefresh,
 }: ProjectsTableProps) {
   const router = useRouter();
   const { user: currentUser } = useCurrentUser();
   const { apiFetch } = useApi();
+
+  const [editingProjectId, setEditingProjectId] = useState<number | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
 
   async function handleDelete(projectId: number) {
     const confirmed = window.confirm("Delete this project?");
@@ -77,6 +84,11 @@ export function ProjectsTable({
     }
   }
 
+  function handleEdit(projectId: number) {
+    setEditingProjectId(projectId);
+    setEditOpen(true);
+  }
+
   if (loading) {
     return (
       <Card className="bg-card">
@@ -90,123 +102,130 @@ export function ProjectsTable({
   }
 
   return (
-    <Card className="bg-card">
-      <CardContent className="p-0">
-        <Table>
-          <TableHeader>
-            <TableRow className="border-border hover:bg-transparent">
-              <TableHead className="text-muted-foreground">
-                Project ID
-              </TableHead>
-              <TableHead className="text-muted-foreground">Name</TableHead>
-              <TableHead className="text-muted-foreground">
-                Lab Manager
-              </TableHead>
-              <TableHead className="text-muted-foreground">
-                Start Date
-              </TableHead>
-              <TableHead className="text-muted-foreground">End Date</TableHead>
-              <TableHead className="text-muted-foreground">Budget</TableHead>
-              <TableHead className="text-muted-foreground">Spent</TableHead>
-              <TableHead className="text-muted-foreground">Status</TableHead>
-              <TableHead className="text-right text-muted-foreground">
-                Actions
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-
-          <TableBody>
-            {projects.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={9}
-                  className="text-muted-foreground h-24 text-center"
-                >
-                  No projects yet. Create one with New Project.
-                </TableCell>
+    <>
+      <Card className="bg-card">
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow className="border-border hover:bg-transparent">
+                <TableHead className="text-muted-foreground">
+                  Project ID
+                </TableHead>
+                <TableHead className="text-muted-foreground">Name</TableHead>
+                <TableHead className="text-muted-foreground">
+                  Lab Manager
+                </TableHead>
+                <TableHead className="text-muted-foreground">
+                  Start Date
+                </TableHead>
+                <TableHead className="text-muted-foreground">End Date</TableHead>
+                <TableHead className="text-muted-foreground">Budget</TableHead>
+                <TableHead className="text-muted-foreground">Spent</TableHead>
+                <TableHead className="text-muted-foreground">Status</TableHead>
+                <TableHead className="text-right text-muted-foreground">
+                  Actions
+                </TableHead>
               </TableRow>
-            ) : (
-              projects.map((project) => (
-                <TableRow key={project.id} className="border-border">
-                  <TableCell className="text-accent font-medium">
-                    <button
-                      onClick={() => router.push(`/projects/${project.id}`)}
-                      className="hover:underline cursor-pointer"
-                    >
-                      {project.project_code}
-                    </button>
-                  </TableCell>
-                  <TableCell className="text-foreground font-medium">
-                    {project.name}
-                  </TableCell>
-                  <TableCell className="text-foreground">
-                    {project.manager_name}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {project.start_date}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {project.end_date}
-                  </TableCell>
-                  <TableCell className="text-foreground font-medium">
-                    {formatUsd(Number(project.budget))}
-                  </TableCell>
-                  <TableCell className="text-foreground">
-                    {formatUsd(Number(project.spent))}
-                  </TableCell>
-                  <TableCell>
-                    <StatusBadge status={normalizeStatus(project.status)} />
-                  </TableCell>
+            </TableHeader>
 
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreHorizontal className="text-muted-foreground h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-
-                      <DropdownMenuContent align="end">
-                        {canViewProject(currentUser) && (
-                          <DropdownMenuItem
-                            onClick={() =>
-                              router.push(`/projects/${project.id}`)
-                            }
-                          >
-                            <Eye className="mr-2 h-4 w-4" />
-                            View
-                          </DropdownMenuItem>
-                        )}
-
-                        {canEditProject(currentUser, project) && (
-                          <DropdownMenuItem
-                            onClick={() =>
-                              router.push(`/projects/${project.id}/edit`)
-                            }
-                          >
-                            <Pencil className="mr-2 h-4 w-4" />
-                            Edit
-                          </DropdownMenuItem>
-                        )}
-
-                        {canDeleteProject(currentUser, project) && (
-                          <DropdownMenuItem
-                            onClick={() => handleDelete(project.id)}
-                            className="text-red-600 focus:text-red-600"
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+            <TableBody>
+              {projects.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={9}
+                    className="text-muted-foreground h-24 text-center"
+                  >
+                    No projects yet. Create one with New Project.
                   </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+              ) : (
+                projects.map((project) => (
+                  <TableRow key={project.id} className="border-border">
+                    <TableCell className="text-accent font-medium">
+                      <button
+                        onClick={() => router.push(`/projects/${project.id}`)}
+                        className="cursor-pointer hover:underline"
+                      >
+                        {project.project_code}
+                      </button>
+                    </TableCell>
+                    <TableCell className="text-foreground font-medium">
+                      {project.name}
+                    </TableCell>
+                    <TableCell className="text-foreground">
+                      {project.manager_name}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {project.start_date}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {project.end_date}
+                    </TableCell>
+                    <TableCell className="text-foreground font-medium">
+                      {formatUsd(Number(project.budget))}
+                    </TableCell>
+                    <TableCell className="text-foreground">
+                      {formatUsd(Number(project.spent))}
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge status={normalizeStatus(project.status)} />
+                    </TableCell>
+
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="text-muted-foreground h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+
+                        <DropdownMenuContent align="end">
+                          {canViewProject(currentUser) && (
+                            <DropdownMenuItem
+                              onClick={() =>
+                                router.push(`/projects/${project.id}`)
+                              }
+                            >
+                              <Eye className="mr-2 h-4 w-4" />
+                              View
+                            </DropdownMenuItem>
+                          )}
+
+                          {canEditProject(currentUser, project) && (
+                            <DropdownMenuItem
+                              onClick={() => handleEdit(project.id)}
+                            >
+                              <Pencil className="mr-2 h-4 w-4" />
+                              Edit
+                            </DropdownMenuItem>
+                          )}
+
+                          {canDeleteProject(currentUser, project) && (
+                            <DropdownMenuItem
+                              onClick={() => handleDelete(project.id)}
+                              className="text-red-600 focus:text-red-600"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <EditProjectForm
+        projectId={editingProjectId}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        onSaved={onRefresh}
+      />
+    </>
   );
 }

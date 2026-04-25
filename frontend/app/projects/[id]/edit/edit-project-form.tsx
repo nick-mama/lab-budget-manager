@@ -1,14 +1,19 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { useApi } from "@/lib/api-client";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 type Researcher = {
   id: number;
@@ -45,28 +50,38 @@ type FormErrors = {
   status?: string;
 };
 
-export default function EditProjectForm({ project }: { project: Project }) {
-  const router = useRouter();
+type Props = {
+  projectId: number | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSaved?: () => void;
+};
+
+export default function EditProjectForm({
+  projectId,
+  open,
+  onOpenChange,
+  onSaved,
+}: Props) {
   const { user: currentUser } = useCurrentUser();
   const { apiFetch } = useApi();
 
+  const [project, setProject] = useState<Project | null>(null);
   const [users, setUsers] = useState<UserRecord[]>([]);
+  const [loadingProject, setLoadingProject] = useState(false);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState({
-    name: project.name,
-    manager_id: project.manager_id,
-    start_date: project.start_date.slice(0, 10),
-    end_date: project.end_date.slice(0, 10),
-    budget: Number(project.budget),
-    status: project.status,
+    name: "",
+    manager_id: 0,
+    start_date: "",
+    end_date: "",
+    budget: 0,
+    status: "active",
   });
 
-  const [selectedResearchers, setSelectedResearchers] = useState<number[]>(
-    (project.researchers ?? []).map((r) => r.id),
-  );
-
+  const [selectedResearchers, setSelectedResearchers] = useState<number[]>([]);
   const [errors, setErrors] = useState<FormErrors>({});
 
   useEffect(() => {
@@ -88,7 +103,44 @@ export default function EditProjectForm({ project }: { project: Project }) {
     }
 
     loadUsers();
-  }, [currentUser]);
+  }, [apiFetch]);
+
+  useEffect(() => {
+    async function loadProject() {
+      if (!open || !projectId) return;
+
+      try {
+        setLoadingProject(true);
+
+        const res = await apiFetch(`/api/projects/${projectId}`);
+
+        if (!res.ok) {
+          throw new Error("Failed to load project");
+        }
+
+        const data = (await res.json()) as Project;
+        setProject(data);
+        setForm({
+          name: data.name,
+          manager_id: data.manager_id,
+          start_date: data.start_date.slice(0, 10),
+          end_date: data.end_date.slice(0, 10),
+          budget: Number(data.budget),
+          status: data.status,
+        });
+        setSelectedResearchers((data.researchers ?? []).map((r) => r.id));
+        setErrors({});
+      } catch (error) {
+        console.error(error);
+        toast.error("Failed to load project.");
+        onOpenChange(false);
+      } finally {
+        setLoadingProject(false);
+      }
+    }
+
+    loadProject();
+  }, [apiFetch, open, projectId, onOpenChange]);
 
   const managers = useMemo(
     () =>
@@ -107,7 +159,7 @@ export default function EditProjectForm({ project }: { project: Project }) {
   const canManageResearchers =
     currentUser?.role === "Financial Admin" ||
     (currentUser?.role === "Lab Manager" &&
-      Number(project.manager_id) === Number(currentUser.id));
+      Number(project?.manager_id) === Number(currentUser.id));
 
   function validateForm() {
     const newErrors: FormErrors = {};
@@ -152,15 +204,14 @@ export default function EditProjectForm({ project }: { project: Project }) {
     );
   }
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-
+  async function handleSubmit() {
+    if (!projectId) return;
     if (!validateForm()) return;
 
     try {
       setSaving(true);
 
-      const res = await apiFetch(`/api/projects/${project.id}`, {
+      const res = await apiFetch(`/api/projects/${projectId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -177,11 +228,8 @@ export default function EditProjectForm({ project }: { project: Project }) {
       }
 
       toast.success("Project updated successfully.");
-
-      setTimeout(() => {
-        router.push("/projects");
-        router.refresh();
-      }, 800);
+      onOpenChange(false);
+      onSaved?.();
     } catch (error) {
       console.error(error);
       toast.error("Update failed.");
@@ -191,165 +239,177 @@ export default function EditProjectForm({ project }: { project: Project }) {
   }
 
   return (
-    <Card className="max-w-3xl">
-      <CardHeader>
-        <CardTitle>Edit Project</CardTitle>
-      </CardHeader>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>Edit Project</DialogTitle>
+        </DialogHeader>
 
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="space-y-2">
-            <Label htmlFor="name">Project Name</Label>
-            <Input
-              id="name"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-            />
-            {errors.name ? (
-              <p className="text-sm text-red-600">{errors.name}</p>
-            ) : null}
+        {loadingProject ? (
+          <div className="py-6 text-sm text-muted-foreground">
+            Loading project...
           </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="manager">Manager</Label>
-            <select
-              id="manager"
-              className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
-              value={form.manager_id}
-              onChange={(e) =>
-                setForm({ ...form, manager_id: Number(e.target.value) })
-              }
-              disabled={loadingUsers}
-            >
-              <option value="">Select a manager</option>
-              {managers.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.name} ({user.role})
-                </option>
-              ))}
-            </select>
-            {errors.manager_id ? (
-              <p className="text-sm text-red-600">{errors.manager_id}</p>
-            ) : null}
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
+        ) : (
+          <div className="space-y-5 py-2">
             <div className="space-y-2">
-              <Label htmlFor="start_date">Start Date</Label>
+              <Label htmlFor="name">Project Name</Label>
               <Input
-                id="start_date"
-                type="date"
-                value={form.start_date}
-                onChange={(e) =>
-                  setForm({ ...form, start_date: e.target.value })
-                }
+                id="name"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
               />
-              {errors.start_date ? (
-                <p className="text-sm text-red-600">{errors.start_date}</p>
+              {errors.name ? (
+                <p className="text-sm text-red-600">{errors.name}</p>
               ) : null}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="end_date">End Date</Label>
-              <Input
-                id="end_date"
-                type="date"
-                value={form.end_date}
-                onChange={(e) => setForm({ ...form, end_date: e.target.value })}
-              />
-              {errors.end_date ? (
-                <p className="text-sm text-red-600">{errors.end_date}</p>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="budget">Budget</Label>
-              <Input
-                id="budget"
-                type="number"
-                min="0"
-                value={form.budget}
-                onChange={(e) =>
-                  setForm({ ...form, budget: Number(e.target.value) })
-                }
-              />
-              {errors.budget ? (
-                <p className="text-sm text-red-600">{errors.budget}</p>
-              ) : null}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="status">Status</Label>
+              <Label htmlFor="manager">Manager</Label>
               <select
-                id="status"
+                id="manager"
                 className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
-                value={form.status}
-                onChange={(e) => setForm({ ...form, status: e.target.value })}
+                value={form.manager_id}
+                onChange={(e) =>
+                  setForm({ ...form, manager_id: Number(e.target.value) })
+                }
+                disabled={loadingUsers}
               >
-                <option value="active">active</option>
-                <option value="completed">completed</option>
-                <option value="closed">closed</option>
+                <option value="">Select a manager</option>
+                {managers.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.name} ({user.role})
+                  </option>
+                ))}
               </select>
-              {errors.status ? (
-                <p className="text-sm text-red-600">{errors.status}</p>
+              {errors.manager_id ? (
+                <p className="text-sm text-red-600">{errors.manager_id}</p>
               ) : null}
             </div>
-          </div>
 
-          {canManageResearchers ? (
-            <div className="space-y-3">
-              <Label>Assigned Researchers</Label>
-              {researchers.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No researchers available.
-                </p>
-              ) : (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {researchers.map((researcher) => {
-                    const checked = selectedResearchers.includes(researcher.id);
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="start_date">Start Date</Label>
+                <Input
+                  id="start_date"
+                  type="date"
+                  value={form.start_date}
+                  onChange={(e) =>
+                    setForm({ ...form, start_date: e.target.value })
+                  }
+                />
+                {errors.start_date ? (
+                  <p className="text-sm text-red-600">{errors.start_date}</p>
+                ) : null}
+              </div>
 
-                    return (
-                      <label
-                        key={researcher.id}
-                        className="flex items-start gap-3 rounded-lg border p-3 cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleResearcher(researcher.id)}
-                          className="mt-1"
-                        />
-                        <div>
-                          <p className="font-medium">{researcher.name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {researcher.email}
-                          </p>
-                        </div>
-                      </label>
-                    );
-                  })}
-                </div>
-              )}
+              <div className="space-y-2">
+                <Label htmlFor="end_date">End Date</Label>
+                <Input
+                  id="end_date"
+                  type="date"
+                  value={form.end_date}
+                  onChange={(e) =>
+                    setForm({ ...form, end_date: e.target.value })
+                  }
+                />
+                {errors.end_date ? (
+                  <p className="text-sm text-red-600">{errors.end_date}</p>
+                ) : null}
+              </div>
             </div>
-          ) : null}
 
-          <div className="flex gap-3 pt-2">
-            <Button type="submit" disabled={saving}>
-              {saving ? "Saving..." : "Save Changes"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => router.push("/projects")}
-              disabled={saving}
-            >
-              Cancel
-            </Button>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="budget">Budget</Label>
+                <Input
+                  id="budget"
+                  type="number"
+                  min="0"
+                  value={form.budget}
+                  onChange={(e) =>
+                    setForm({ ...form, budget: Number(e.target.value) })
+                  }
+                />
+                {errors.budget ? (
+                  <p className="text-sm text-red-600">{errors.budget}</p>
+                ) : null}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="status">Status</Label>
+                <select
+                  id="status"
+                  className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+                  value={form.status}
+                  onChange={(e) => setForm({ ...form, status: e.target.value })}
+                >
+                  <option value="active">active</option>
+                  <option value="completed">completed</option>
+                  <option value="closed">closed</option>
+                </select>
+                {errors.status ? (
+                  <p className="text-sm text-red-600">{errors.status}</p>
+                ) : null}
+              </div>
+            </div>
+
+            {canManageResearchers ? (
+              <div className="space-y-3">
+                <Label>Assigned Researchers</Label>
+                {researchers.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No researchers available.
+                  </p>
+                ) : (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {researchers.map((researcher) => {
+                      const checked = selectedResearchers.includes(researcher.id);
+
+                      return (
+                        <label
+                          key={researcher.id}
+                          className="flex cursor-pointer items-start gap-3 rounded-lg border p-3"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleResearcher(researcher.id)}
+                            className="mt-1"
+                          />
+                          <div>
+                            <p className="font-medium">{researcher.name}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {researcher.email}
+                            </p>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ) : null}
           </div>
-        </form>
-      </CardContent>
-    </Card>
+        )}
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={saving}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            onClick={handleSubmit}
+            disabled={saving || loadingProject}
+          >
+            {saving ? "Saving..." : "Save Changes"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
