@@ -5,8 +5,8 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
-    "test": "jest --testPathPattern='__tests__' --runInBand",
-    "test:watch": "jest --testPathPattern='__tests__' --watch"
+    "test": "jest --testPathPattern=__tests__ --runInBand",
+    "test:watch": "jest --testPathPattern=__tests__ --watch"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
@@ -23,9 +23,7 @@
   },
   "jest": {
     "testEnvironment": "node",
-    "testMatch": [
-      "**/__tests__/**/*.test.js"
-    ],
+    "testMatch": ["**/__tests__/**/*.test.js"],
     "clearMocks": true
   }
 }

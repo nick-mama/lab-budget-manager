@@ -225,11 +225,12 @@ If you prefer, you can also run the SQL scripts in `database/` manually:
 
 ### 2) Create your `.env` file (repo root)
 
-Copy `.env.example` to `.env` in the **repo root** and adjust values for your MySQL install:
+Create `.env` in the repo root by copying `.env.example`.
 
-```bash
-cp .env.example .env
-```
+Examples:
+
+- macOS/Linux: `cp .env.example .env`
+- Windows PowerShell: `Copy-Item .env.example .env`
 
 Minimum required environment variables:
 
