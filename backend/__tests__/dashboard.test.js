@@ -2,14 +2,46 @@ const request = require("supertest");
 const express = require("express");
 const { mockDb } = require("./helpers");
 
-function buildApp() {
+jest.mock("../middleware/auth", () => ({
+  attachUser: (req, _res, next) => next(),
+  requireUser: (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ error: "unauthorized" });
+    }
+    next();
+  },
+  requireRole: (roles) => (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ error: "unauthorized" });
+    }
+
+    const allowed = Array.isArray(roles) ? roles : [roles];
+    if (!allowed.includes(req.user.role)) {
+      return res.status(403).json({ error: "forbidden" });
+    }
+
+    next();
+  },
+}));
+
+function buildApp(user = null) {
   const app = express();
   app.use(express.json());
+  app.use((req, _res, next) => {
+    req.user = user;
+    next();
+  });
   app.use("/api/dashboard", require("../routes/dashboard"));
   return app;
 }
 
 describe("GET /api/dashboard/stats", () => {
+  it("returns 401 when unauthenticated", async () => {
+    const res = await request(buildApp()).get("/api/dashboard/stats");
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe("unauthorized");
+  });
+
   it("returns all four stat card values", async () => {
     mockDb.get
       .mockResolvedValueOnce({ count: 4 })      // active projects
@@ -17,7 +49,9 @@ describe("GET /api/dashboard/stats", () => {
       .mockResolvedValueOnce({ count: 3 })      // pending requests
       .mockResolvedValueOnce({ count: 5 });     // team members
 
-    const res = await request(buildApp()).get("/api/dashboard/stats");
+    const res = await request(buildApp({ id: 1, role: "Financial Admin" })).get(
+      "/api/dashboard/stats",
+    );
     expect(res.status).toBe(200);
     expect(res.body).toEqual({
       active_projects: 4,
@@ -29,7 +63,9 @@ describe("GET /api/dashboard/stats", () => {
 
   it("returns 500 on db error", async () => {
     mockDb.get.mockRejectedValue(new Error("db down"));
-    const res = await request(buildApp()).get("/api/dashboard/stats");
+    const res = await request(buildApp({ id: 1, role: "Financial Admin" })).get(
+      "/api/dashboard/stats",
+    );
     expect(res.status).toBe(500);
     expect(res.body.error).toBe("db down");
   });
@@ -42,7 +78,9 @@ describe("GET /api/dashboard/budget-chart", () => {
       { name: "Project B", allocated: 50000, spent: 50000 },
     ]);
 
-    const res = await request(buildApp()).get("/api/dashboard/budget-chart");
+    const res = await request(buildApp({ id: 1, role: "Financial Admin" })).get(
+      "/api/dashboard/budget-chart",
+    );
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(2);
     expect(res.body[0]).toHaveProperty("allocated");
@@ -51,14 +89,18 @@ describe("GET /api/dashboard/budget-chart", () => {
 
   it("returns empty array when no projects exist", async () => {
     mockDb.all.mockResolvedValue([]);
-    const res = await request(buildApp()).get("/api/dashboard/budget-chart");
+    const res = await request(buildApp({ id: 1, role: "Financial Admin" })).get(
+      "/api/dashboard/budget-chart",
+    );
     expect(res.status).toBe(200);
     expect(res.body).toEqual([]);
   });
 
   it("returns 500 on db error", async () => {
     mockDb.all.mockRejectedValue(new Error("query failed"));
-    const res = await request(buildApp()).get("/api/dashboard/budget-chart");
+    const res = await request(buildApp({ id: 1, role: "Financial Admin" })).get(
+      "/api/dashboard/budget-chart",
+    );
     expect(res.status).toBe(500);
   });
 });
@@ -71,7 +113,9 @@ describe("GET /api/dashboard/line-item-stats", () => {
       .mockResolvedValueOnce({ count: 1, total: 5000 })   // rejected
       .mockResolvedValueOnce({ count: 2, total: 10980 }); // reimbursed
 
-    const res = await request(buildApp()).get("/api/dashboard/line-item-stats");
+    const res = await request(buildApp({ id: 1, role: "Financial Admin" })).get(
+      "/api/dashboard/line-item-stats",
+    );
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty("pending");
     expect(res.body).toHaveProperty("approved");
@@ -82,7 +126,9 @@ describe("GET /api/dashboard/line-item-stats", () => {
 
   it("returns 500 on db error", async () => {
     mockDb.get.mockRejectedValue(new Error("stats fail"));
-    const res = await request(buildApp()).get("/api/dashboard/line-item-stats");
+    const res = await request(buildApp({ id: 1, role: "Financial Admin" })).get(
+      "/api/dashboard/line-item-stats",
+    );
     expect(res.status).toBe(500);
   });
 });
@@ -97,14 +143,18 @@ describe("GET /api/dashboard/recent-activity", () => {
     }));
     mockDb.all.mockResolvedValue(items);
 
-    const res = await request(buildApp()).get("/api/dashboard/recent-activity");
+    const res = await request(buildApp({ id: 1, role: "Financial Admin" })).get(
+      "/api/dashboard/recent-activity",
+    );
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(5);
   });
 
   it("returns 500 on db error", async () => {
     mockDb.all.mockRejectedValue(new Error("activity fail"));
-    const res = await request(buildApp()).get("/api/dashboard/recent-activity");
+    const res = await request(buildApp({ id: 1, role: "Financial Admin" })).get(
+      "/api/dashboard/recent-activity",
+    );
     expect(res.status).toBe(500);
   });
 });
@@ -115,7 +165,9 @@ describe("GET /api/dashboard/budget-summary", () => {
       .mockResolvedValueOnce({ total_allocated: 655000, total_spent: 180000 })
       .mockResolvedValueOnce({ total: 6700, count: 3 });
 
-    const res = await request(buildApp()).get("/api/dashboard/budget-summary");
+    const res = await request(buildApp({ id: 1, role: "Financial Admin" })).get(
+      "/api/dashboard/budget-summary",
+    );
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({
       total_allocated: 655000,
@@ -131,13 +183,17 @@ describe("GET /api/dashboard/budget-summary", () => {
       .mockResolvedValueOnce({ total_allocated: 200000, total_spent: 75000 })
       .mockResolvedValueOnce({ total: 0, count: 0 });
 
-    const res = await request(buildApp()).get("/api/dashboard/budget-summary");
+    const res = await request(buildApp({ id: 1, role: "Financial Admin" })).get(
+      "/api/dashboard/budget-summary",
+    );
     expect(res.body.remaining).toBe(125000);
   });
 
   it("returns 500 on db error", async () => {
     mockDb.get.mockRejectedValue(new Error("summary fail"));
-    const res = await request(buildApp()).get("/api/dashboard/budget-summary");
+    const res = await request(buildApp({ id: 1, role: "Financial Admin" })).get(
+      "/api/dashboard/budget-summary",
+    );
     expect(res.status).toBe(500);
   });
 });

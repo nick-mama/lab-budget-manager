@@ -19,27 +19,30 @@ export default function LoginPage() {
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
+    try {
+      const res = await fetch(buildApiUrl("/api/auth/login"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username,
+          password,
+        }),
+      });
 
-    const res = await fetch(buildApiUrl("/api/auth/login"), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        username,
-        password,
-      }),
-    });
+      const data = await res.json();
 
-    const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Login failed");
+        return;
+      }
 
-    if (!res.ok) {
-      setError(data.error || "Login failed");
-      return;
+      setAuth(data.token, data.user);
+      router.push("/");
+    } catch {
+      setError("Unable to reach the server. Please try again.");
     }
-
-    setAuth(data.token, data.user);
-    router.push("/");
   }
 
   return (

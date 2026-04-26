@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { get, all, run } = require("../db");
+const { get, all, run, withTransaction } = require("../db");
 const { requireRole, requireUser } = require("../middleware/auth");
 
 async function isProjectMember(projectId, userId) {
@@ -19,14 +19,14 @@ async function isProjectManager(projectId, userId) {
   return Number(row.manager_id) === Number(userId);
 }
 
-async function recalcBudgetForProject(projectId) {
-  const budget = await get(
+async function recalcBudgetForProject(projectId, db = { get, run }) {
+  const budget = await db.get(
     "SELECT id, total_allocated_amount FROM budgets WHERE project_id = ?",
     [projectId],
   );
   if (!budget) return;
 
-  const sums = await get(
+  const sums = await db.get(
     `
     SELECT
       COALESCE(SUM(CASE WHEN type = 'expense' AND status IN ('approved','reimbursed') THEN amount ELSE 0 END), 0) as expenses,
@@ -42,14 +42,14 @@ async function recalcBudgetForProject(projectId) {
   const revenue = Number(sums.revenue ?? 0);
   const remaining = allocated + revenue - expenses;
 
-  await run("UPDATE budgets SET remaining_balance = ? WHERE id = ?", [
+  await db.run("UPDATE budgets SET remaining_balance = ? WHERE id = ?", [
     remaining,
     budget.id,
   ]);
 }
 
 // get all line items, supports ?status= ?type= ?project_id= filters
-router.get("/", async (req, res) => {
+router.get("/", requireUser, async (req, res) => {
   try {
     const { status, type, project_id } = req.query;
 
@@ -100,7 +100,7 @@ router.get("/", async (req, res) => {
 });
 
 // get a single line item
-router.get("/:id", async (req, res) => {
+router.get("/:id", requireUser, async (req, res) => {
   try {
     const item = await get(
       `
@@ -186,24 +186,27 @@ router.post(
         return res.status(400).json({ error: "project has no budget" });
       }
 
-      const result = await run(
-        "INSERT INTO line_items (item_code, description, project_id, budget_id, requestor_id, type, amount, request_date, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        [
-          item_code,
-          description,
-          pid,
-          budget.id,
-          req.user.id,
-          type,
-          amount,
-          request_date,
-          "pending",
-        ],
-      );
+      const item = await withTransaction(async (tx) => {
+        const result = await tx.run(
+          "INSERT INTO line_items (item_code, description, project_id, budget_id, requestor_id, type, amount, request_date, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          [
+            item_code,
+            description,
+            pid,
+            budget.id,
+            req.user.id,
+            type,
+            amount,
+            request_date,
+            "pending",
+          ],
+        );
 
-      const item = await get("SELECT * FROM line_items WHERE id = ?", [
-        result.lastInsertRowid,
-      ]);
+        return tx.get("SELECT * FROM line_items WHERE id = ?", [
+          result.lastInsertRowid,
+        ]);
+      });
+
       res.status(201).json(item);
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -310,61 +313,61 @@ router.put("/:id", requireUser, async (req, res) => {
       newBudgetId = newBudget.id;
     }
 
-    await run(
-      `
-      UPDATE line_items
-      SET
-        description = ?,
-        project_id = ?,
-        budget_id = ?,
-        type = ?,
-        amount = ?,
-        request_date = ?,
-        status = ?,
-        approver_id = CASE
-          WHEN ? IN ('approved','rejected') THEN ?
-          ELSE approver_id
-        END,
-        decision_date = CASE
-          WHEN ? IN ('approved','rejected') THEN CURRENT_DATE()
-          ELSE decision_date
-        END,
-        payment_date = CASE
-          WHEN ? = 'reimbursed' THEN CURRENT_DATE()
-          ELSE payment_date
-        END,
-        rejection_reason = CASE
-          WHEN ? = 'rejected' THEN ?
-          ELSE rejection_reason
-        END
-      WHERE id = ?
-      `,
-      [
-        description ?? item.description,
-        newPid,
-        newBudgetId,
-        type ?? item.type,
-        amount ?? item.amount,
-        request_date ?? item.request_date,
-        nextStatus,
-        nextStatus,
-        req.user.id,
-        nextStatus,
-        nextStatus,
-        nextStatus,
-        rejection_reason ?? item.rejection_reason,
-        req.params.id,
-      ],
-    );
+    const updatedRow = await withTransaction(async (tx) => {
+      await tx.run(
+        `
+        UPDATE line_items
+        SET
+          description = ?,
+          project_id = ?,
+          budget_id = ?,
+          type = ?,
+          amount = ?,
+          request_date = ?,
+          status = ?,
+          approver_id = CASE
+            WHEN ? IN ('approved','rejected') THEN ?
+            ELSE approver_id
+          END,
+          decision_date = CASE
+            WHEN ? IN ('approved','rejected') THEN CURRENT_DATE()
+            ELSE decision_date
+          END,
+          payment_date = CASE
+            WHEN ? = 'reimbursed' THEN CURRENT_DATE()
+            ELSE payment_date
+          END,
+          rejection_reason = CASE
+            WHEN ? = 'rejected' THEN ?
+            ELSE rejection_reason
+          END
+        WHERE id = ?
+        `,
+        [
+          description ?? item.description,
+          newPid,
+          newBudgetId,
+          type ?? item.type,
+          amount ?? item.amount,
+          request_date ?? item.request_date,
+          nextStatus,
+          nextStatus,
+          req.user.id,
+          nextStatus,
+          nextStatus,
+          nextStatus,
+          rejection_reason ?? item.rejection_reason,
+          req.params.id,
+        ],
+      );
 
-    const updatedRow = await get("SELECT * FROM line_items WHERE id = ?", [
-      req.params.id,
-    ]);
+      await recalcBudgetForProject(newPid, tx);
+      if (projectChanged) {
+        await recalcBudgetForProject(oldPid, tx);
+      }
 
-    await recalcBudgetForProject(newPid);
-    if (projectChanged) {
-      await recalcBudgetForProject(oldPid);
-    }
+      return tx.get("SELECT * FROM line_items WHERE id = ?", [req.params.id]);
+    });
 
     res.json(updatedRow);
   } catch (err) {
@@ -385,8 +388,10 @@ router.delete("/:id", requireUser, async (req, res) => {
     const isManager = await isProjectManager(pid, req.user.id);
 
     if (isAdmin || isManager) {
-      await run("DELETE FROM line_items WHERE id = ?", [req.params.id]);
-      await recalcBudgetForProject(pid);
+      await withTransaction(async (tx) => {
+        await tx.run("DELETE FROM line_items WHERE id = ?", [req.params.id]);
+        await recalcBudgetForProject(pid, tx);
+      });
       return res.json({ message: "line item deleted" });
     }
 

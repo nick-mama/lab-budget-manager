@@ -39,6 +39,37 @@ async function run(sql, params = []) {
   return { lastInsertRowid: result.insertId };
 }
 
+async function withTransaction(work) {
+  const connection = await getPool().getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const tx = {
+      async get(sql, params = []) {
+        const [rows] = await connection.execute(sql, params);
+        return rows[0] ?? null;
+      },
+      async all(sql, params = []) {
+        const [rows] = await connection.execute(sql, params);
+        return rows;
+      },
+      async run(sql, params = []) {
+        const [result] = await connection.execute(sql, params);
+        return { lastInsertRowid: result.insertId };
+      },
+    };
+
+    const result = await work(tx);
+    await connection.commit();
+    return result;
+  } catch (err) {
+    await connection.rollback();
+    throw err;
+  } finally {
+    connection.release();
+  }
+}
+
 async function search(tableName, columns, keyword) {
   const safeSelect = SAFE_SELECT_FIELDS[tableName] || "*";
 
@@ -540,5 +571,6 @@ module.exports = {
   get,
   all,
   run,
+  withTransaction,
   search,
 };

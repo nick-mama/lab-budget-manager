@@ -4,7 +4,12 @@ const { mockDb, makeUser, makeProject } = require("./helpers");
 
 jest.mock("../middleware/auth", () => ({
   attachUser: (req, _res, next) => next(),
-  requireUser: (req, res, next) => next(),
+  requireUser: (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ error: "unauthorized" });
+    }
+    next();
+  },
   requireRole: (roles) => (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({ error: "unauthorized" });
@@ -32,6 +37,12 @@ function buildApp(user = null) {
 }
 
 describe("GET /api/projects", () => {
+  it("returns 401 when unauthenticated", async () => {
+    const res = await request(buildApp(null)).get("/api/projects");
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe("unauthorized");
+  });
+
   it("returns all projects for Financial Admin", async () => {
     mockDb.all.mockResolvedValue([makeProject()]);
     const res = await request(buildApp(makeUser({ role: "Financial Admin" }))).get("/api/projects");
@@ -77,6 +88,12 @@ describe("GET /api/projects", () => {
 });
 
 describe("GET /api/projects/:id", () => {
+  it("returns 401 when unauthenticated", async () => {
+    const res = await request(buildApp(null)).get("/api/projects/1");
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe("unauthorized");
+  });
+
   it("returns project with line items", async () => {
     mockDb.get.mockResolvedValue(makeProject());
     mockDb.all.mockResolvedValue([]);
