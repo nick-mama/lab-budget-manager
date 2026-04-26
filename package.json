@@ -20,7 +20,7 @@
   "homepage": "https://github.com/nick-mama/lab-budget-manager#readme",
   "devDependencies": {
     "concurrently": "^9.2.1",
-    "rimraf": "^6.1.3"
+    "jest": "^30.3.0"
   },
   "dependencies": {
     "next": "16.2.3"

@@ -3,13 +3,12 @@ const router = express.Router();
 const { get, all, run } = require("../db");
 const { requireRole } = require("../middleware/auth");
 
-// get all projects with manager name and spending totals, optional ?status= filter
 router.get("/", async (req, res) => {
   try {
     const { status } = req.query;
 
     let query = `
-      SELECT
+      SELECT DISTINCT
         p.*,
         u.name as manager_name,
         COALESCE(s.spent, 0) as spent,
@@ -17,8 +16,14 @@ router.get("/", async (req, res) => {
       FROM projects p
       JOIN users u ON p.manager_id = u.id
       LEFT JOIN (
-        SELECT project_id,
-          SUM(CASE WHEN type = 'expense' AND status != 'rejected' THEN amount ELSE 0 END) as spent
+        SELECT
+          project_id,
+          SUM(
+            CASE
+              WHEN type = 'expense' AND status != 'rejected' THEN amount
+              ELSE 0
+            END
+          ) as spent
         FROM line_items
         GROUP BY project_id
       ) s ON s.project_id = p.id
@@ -27,27 +32,28 @@ router.get("/", async (req, res) => {
         FROM line_items
         GROUP BY project_id
       ) c ON c.project_id = p.id
+      LEFT JOIN project_users pu ON pu.project_id = p.id
     `;
+
     const params = [];
 
-    // Role-scoped reads (backwards-compatible: if no x-user-id, return all)
     if (req.user?.role === "Lab Manager") {
       query += " WHERE p.manager_id = ?";
       params.push(req.user.id);
+
       if (status && status !== "all") {
         query += " AND p.status = ?";
         params.push(status);
       }
     } else if (req.user?.role === "Researcher") {
-      query +=
-        " JOIN project_users pu ON pu.project_id = p.id WHERE pu.user_id = ?";
+      query += " WHERE pu.user_id = ?";
       params.push(req.user.id);
+
       if (status && status !== "all") {
         query += " AND p.status = ?";
         params.push(status);
       }
     } else {
-      // Financial Admin (or unauthenticated) -> can view all
       if (status && status !== "all") {
         query += " WHERE p.status = ?";
         params.push(status);
@@ -63,22 +69,26 @@ router.get("/", async (req, res) => {
   }
 });
 
-// get a single project with its line items
 router.get("/:id", async (req, res) => {
   try {
-    // Role-scoped reads (backwards-compatible: if no x-user-id, allow)
     if (req.user?.role === "Lab Manager") {
       const ok = await get(
         "SELECT 1 as ok FROM projects WHERE id = ? AND manager_id = ?",
         [req.params.id, req.user.id],
       );
-      if (!ok) return res.status(403).json({ error: "forbidden" });
+
+      if (!ok) {
+        return res.status(403).json({ error: "forbidden" });
+      }
     } else if (req.user?.role === "Researcher") {
       const ok = await get(
         "SELECT 1 as ok FROM project_users WHERE project_id = ? AND user_id = ?",
         [req.params.id, req.user.id],
       );
-      if (!ok) return res.status(403).json({ error: "forbidden" });
+
+      if (!ok) {
+        return res.status(403).json({ error: "forbidden" });
+      }
     }
 
     const project = await get(
@@ -90,17 +100,25 @@ router.get("/:id", async (req, res) => {
       FROM projects p
       JOIN users u ON p.manager_id = u.id
       LEFT JOIN (
-        SELECT project_id,
-          SUM(CASE WHEN type = 'expense' AND status != 'rejected' THEN amount ELSE 0 END) as spent
+        SELECT
+          project_id,
+          SUM(
+            CASE
+              WHEN type = 'expense' AND status != 'rejected' THEN amount
+              ELSE 0
+            END
+          ) as spent
         FROM line_items
         GROUP BY project_id
       ) s ON s.project_id = p.id
       WHERE p.id = ?
-    `,
+      `,
       [req.params.id],
     );
 
-    if (!project) return res.status(404).json({ error: "project not found" });
+    if (!project) {
+      return res.status(404).json({ error: "project not found" });
+    }
 
     let lineItemsQuery = `
       SELECT li.*, u.name as requestor_name
@@ -109,27 +127,29 @@ router.get("/:id", async (req, res) => {
       WHERE li.project_id = ?
     `;
     const liParams = [req.params.id];
+
     if (req.user?.role === "Researcher") {
       lineItemsQuery += " AND li.requestor_id = ?";
       liParams.push(req.user.id);
     }
+
     lineItemsQuery += " ORDER BY li.request_date DESC";
 
     const lineItems = await all(lineItemsQuery, liParams);
 
     const researchers = await all(
       `
-  SELECT
-    u.id,
-    u.name,
-    u.email,
-    u.role
-  FROM project_users pu
-  JOIN users u ON pu.user_id = u.id
-  WHERE pu.project_id = ?
-    AND u.role = 'Researcher'
-  ORDER BY u.name ASC
-  `,
+      SELECT
+        u.id,
+        u.name,
+        u.email,
+        u.role
+      FROM project_users pu
+      JOIN users u ON pu.user_id = u.id
+      WHERE pu.project_id = ?
+        AND u.role = 'Researcher'
+      ORDER BY u.name ASC
+      `,
       [req.params.id],
     );
 
@@ -143,7 +163,6 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// create a project
 router.post(
   "/",
   requireRole(["Lab Manager", "Financial Admin"]),
@@ -158,6 +177,7 @@ router.post(
         status,
         researcher_ids,
       } = req.body;
+
       if (
         !name ||
         !manager_id ||
@@ -171,7 +191,6 @@ router.post(
         });
       }
 
-      // Lab managers can only create projects they manage
       if (
         req.user.role === "Lab Manager" &&
         Number(manager_id) !== Number(req.user.id)
@@ -184,15 +203,21 @@ router.post(
       const last = await get(
         "SELECT project_code FROM projects ORDER BY id DESC LIMIT 1",
       );
+
       let nextNum = 1;
       if (last) {
         nextNum =
           parseInt(String(last.project_code).replace("PRJ-", ""), 10) + 1;
       }
+
       const project_code = `PRJ-${String(nextNum).padStart(3, "0")}`;
 
       const result = await run(
-        "INSERT INTO projects (project_code, name, manager_id, start_date, end_date, budget, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        `
+        INSERT INTO projects
+          (project_code, name, manager_id, start_date, end_date, budget, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        `,
         [
           project_code,
           name,
@@ -204,9 +229,12 @@ router.post(
         ],
       );
 
-      // create a corresponding budget row so line items can be submitted against this project
       await run(
-        "INSERT INTO budgets (project_id, total_allocated_amount, remaining_balance) VALUES (?, ?, ?)",
+        `
+        INSERT INTO budgets
+          (project_id, total_allocated_amount, remaining_balance)
+        VALUES (?, ?, ?)
+        `,
         [result.lastInsertRowid, budget, budget],
       );
 
@@ -214,11 +242,19 @@ router.post(
         result.lastInsertRowid,
       ]);
 
-      // ensure membership for manager
       await run(
         "INSERT IGNORE INTO project_users (project_id, user_id) VALUES (?, ?)",
         [result.lastInsertRowid, manager_id],
       );
+
+      if (Array.isArray(researcher_ids)) {
+        for (const researcherId of researcher_ids) {
+          await run(
+            "INSERT IGNORE INTO project_users (project_id, user_id) VALUES (?, ?)",
+            [result.lastInsertRowid, researcherId],
+          );
+        }
+      }
 
       res.status(201).json(project);
     } catch (err) {
@@ -227,7 +263,6 @@ router.post(
   },
 );
 
-// update a project
 router.put(
   "/:id",
   requireRole(["Lab Manager", "Financial Admin"]),
@@ -236,9 +271,11 @@ router.put(
       const project = await get("SELECT * FROM projects WHERE id = ?", [
         req.params.id,
       ]);
-      if (!project) return res.status(404).json({ error: "project not found" });
 
-      // Lab managers can only update projects they manage
+      if (!project) {
+        return res.status(404).json({ error: "project not found" });
+      }
+
       if (
         req.user.role === "Lab Manager" &&
         Number(project.manager_id) !== Number(req.user.id)
@@ -270,10 +307,10 @@ router.put(
 
       await run(
         `
-      UPDATE projects
-      SET name = ?, manager_id = ?, start_date = ?, end_date = ?, budget = ?, status = ?
-      WHERE id = ?
-    `,
+        UPDATE projects
+        SET name = ?, manager_id = ?, start_date = ?, end_date = ?, budget = ?, status = ?
+        WHERE id = ?
+        `,
         [
           name ?? project.name,
           manager_id ?? project.manager_id,
@@ -285,11 +322,15 @@ router.put(
         ],
       );
 
-      // keep budgets table in sync when the allocated amount changes
       if (budget !== undefined && Number(budget) !== Number(project.budget)) {
         const diff = Number(budget) - Number(project.budget);
+
         await run(
-          "UPDATE budgets SET total_allocated_amount = ?, remaining_balance = remaining_balance + ? WHERE project_id = ?",
+          `
+          UPDATE budgets
+          SET total_allocated_amount = ?, remaining_balance = remaining_balance + ?
+          WHERE project_id = ?
+          `,
           [budget, diff, req.params.id],
         );
       }
@@ -298,23 +339,20 @@ router.put(
         req.params.id,
       ]);
 
-      // Ensure manager is always part of the project
       await run(
         "INSERT IGNORE INTO project_users (project_id, user_id) VALUES (?, ?)",
         [req.params.id, updated.manager_id],
       );
 
-      // If researcher_ids were provided, replace current researcher assignments
       if (Array.isArray(researcher_ids)) {
-        // Remove only researchers from this project; keep the manager membership
         await run(
           `
-    DELETE pu
-    FROM project_users pu
-    JOIN users u ON pu.user_id = u.id
-    WHERE pu.project_id = ?
-      AND u.role = 'Researcher'
-    `,
+          DELETE pu
+          FROM project_users pu
+          JOIN users u ON pu.user_id = u.id
+          WHERE pu.project_id = ?
+            AND u.role = 'Researcher'
+          `,
           [req.params.id],
         );
 
@@ -328,13 +366,13 @@ router.put(
 
       const researchers = await all(
         `
-  SELECT u.id, u.name, u.email, u.role
-  FROM project_users pu
-  JOIN users u ON pu.user_id = u.id
-  WHERE pu.project_id = ?
-    AND u.role = 'Researcher'
-  ORDER BY u.name ASC
-  `,
+        SELECT u.id, u.name, u.email, u.role
+        FROM project_users pu
+        JOIN users u ON pu.user_id = u.id
+        WHERE pu.project_id = ?
+          AND u.role = 'Researcher'
+        ORDER BY u.name ASC
+        `,
         [req.params.id],
       );
 
@@ -345,7 +383,6 @@ router.put(
   },
 );
 
-// delete a project and all its line items
 router.delete(
   "/:id",
   requireRole(["Lab Manager", "Financial Admin"]),
@@ -354,7 +391,10 @@ router.delete(
       const project = await get("SELECT * FROM projects WHERE id = ?", [
         req.params.id,
       ]);
-      if (!project) return res.status(404).json({ error: "project not found" });
+
+      if (!project) {
+        return res.status(404).json({ error: "project not found" });
+      }
 
       if (
         req.user.role === "Lab Manager" &&

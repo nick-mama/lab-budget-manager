@@ -6,10 +6,16 @@ jest.mock("../middleware/auth", () => ({
   attachUser: (req, _res, next) => next(),
   requireUser: (req, res, next) => next(),
   requireRole: (roles) => (req, res, next) => {
-    if (!req.user) return res.status(401).json({ error: "missing or invalid x-user-id" });
+    if (!req.user) {
+      return res.status(401).json({ error: "unauthorized" });
+    }
+
     const allowed = Array.isArray(roles) ? roles : [roles];
-    if (!allowed.includes(req.user.role))
+
+    if (!allowed.includes(req.user.role)) {
       return res.status(403).json({ error: "forbidden" });
+    }
+
     next();
   },
 }));

@@ -183,6 +183,78 @@ router.put("/:id/password", requireUser, async (req, res) => {
   }
 });
 
+router.put("/:id", requireUser, async (req, res) => {
+  try {
+    const targetUserId = Number(req.params.id);
+    const { firstName, lastName, email, role, username } = req.body;
+
+    if (!firstName || !lastName || !email || !username) {
+      return res.status(400).json({
+        error: "firstName, lastName, email, and username are required",
+      });
+    }
+
+    const isFinancialAdmin = req.user.role === "Financial Admin";
+    const isSelf = Number(req.user.id) === targetUserId;
+
+    if (!isFinancialAdmin && !isSelf) {
+      return res.status(403).json({ error: "forbidden" });
+    }
+
+    const existingUser = await get(
+      "SELECT id, role FROM users WHERE id = ?",
+      [targetUserId],
+    );
+
+    if (!existingUser) {
+      return res.status(404).json({ error: "user not found" });
+    }
+
+    const emailOwner = await get(
+      "SELECT id FROM users WHERE email = ? AND id != ?",
+      [email.trim(), targetUserId],
+    );
+
+    if (emailOwner) {
+      return res.status(400).json({ error: "Email already exists" });
+    }
+
+    const usernameOwner = await get(
+      "SELECT id FROM users WHERE username = ? AND id != ?",
+      [username.trim(), targetUserId],
+    );
+
+    if (usernameOwner) {
+      return res.status(400).json({ error: "Username already exists" });
+    }
+
+    const fullName = `${firstName} ${lastName}`.trim();
+    const nextRole = isFinancialAdmin ? role : existingUser.role;
+
+    await run(
+      `
+      UPDATE users
+      SET name = ?, email = ?, role = ?, username = ?
+      WHERE id = ?
+      `,
+      [fullName, email.trim(), nextRole, username.trim(), targetUserId],
+    );
+
+    const updatedUser = await get(
+      `
+      SELECT id, name, email, role, avatar, username
+      FROM users
+      WHERE id = ?
+      `,
+      [targetUserId],
+    );
+
+    res.json(updatedUser);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.delete("/:id", requireRole(["Financial Admin"]), async (req, res) => {
   try {
     const targetUserId = Number(req.params.id);
