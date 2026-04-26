@@ -2,6 +2,13 @@ const mockDb = {
   get: jest.fn(),
   all: jest.fn(),
   run: jest.fn(),
+  withTransaction: jest.fn(async (work) =>
+    work({
+      get: mockDb.get,
+      all: mockDb.all,
+      run: mockDb.run,
+    }),
+  ),
 };
 
 jest.mock("../db", () => mockDb);

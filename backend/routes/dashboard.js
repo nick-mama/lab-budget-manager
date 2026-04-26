@@ -1,9 +1,10 @@
 const express = require("express");
 const router = express.Router();
 const { get, all } = require("../db");
+const { requireUser } = require("../middleware/auth");
 
 // summary counts for the 4 stat cards on the dashboard
-router.get("/stats", async (req, res) => {
+router.get("/stats", requireUser, async (req, res) => {
   try {
     const activeProjects = await get(
       "SELECT COUNT(*) as count FROM projects WHERE status = 'active'"
@@ -29,7 +30,7 @@ router.get("/stats", async (req, res) => {
 });
 
 // per-project allocated vs spent for the bar chart
-router.get("/budget-chart", async (req, res) => {
+router.get("/budget-chart", requireUser, async (req, res) => {
   try {
     const data = await all(`
       SELECT
@@ -49,7 +50,7 @@ router.get("/budget-chart", async (req, res) => {
 });
 
 // counts and totals by status for the line items stats cards
-router.get("/line-item-stats", async (req, res) => {
+router.get("/line-item-stats", requireUser, async (req, res) => {
   try {
     const statuses = ["pending", "approved", "rejected", "reimbursed"];
     const result = {};
@@ -69,7 +70,7 @@ router.get("/line-item-stats", async (req, res) => {
 });
 
 // last 5 line item actions for the recent activity feed
-router.get("/recent-activity", async (req, res) => {
+router.get("/recent-activity", requireUser, async (req, res) => {
   try {
     const items = await all(`
       SELECT li.*, u.name as requestor_name, p.name as project_name
@@ -87,7 +88,7 @@ router.get("/recent-activity", async (req, res) => {
 });
 
 // totals for the budget summary cards on the budgets page (subqueries avoid join inflation)
-router.get("/budget-summary", async (req, res) => {
+router.get("/budget-summary", requireUser, async (req, res) => {
   try {
     const totals = await get(`
       SELECT

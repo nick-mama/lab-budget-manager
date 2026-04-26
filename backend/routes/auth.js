@@ -65,11 +65,11 @@ router.post("/login", async (req, res) => {
 
 router.post("/signup", async (req, res) => {
   try {
-    const { name, email, username, password, role } = req.body;
+    const { name, email, username, password } = req.body;
 
-    if (!name || !email || !username || !password || !role) {
+    if (!name || !email || !username || !password) {
       return res.status(400).json({
-        error: "name, email, username, password, and role are required",
+        error: "name, email, username, and password are required",
       });
     }
 
@@ -99,6 +99,7 @@ router.post("/signup", async (req, res) => {
       .slice(0, 2);
 
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+    const role = "Researcher";
 
     const result = await run(
       `

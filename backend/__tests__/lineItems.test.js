@@ -40,6 +40,12 @@ function buildApp(user = null) {
 }
 
 describe("GET /api/line-items", () => {
+  it("returns 401 when unauthenticated", async () => {
+    const res = await request(buildApp(null)).get("/api/line-items");
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe("unauthorized");
+  });
+
   it("returns all items for Financial Admin", async () => {
     mockDb.all.mockResolvedValue([makeLineItem()]);
     const res = await request(
@@ -106,6 +112,12 @@ describe("GET /api/line-items", () => {
 });
 
 describe("GET /api/line-items/:id", () => {
+  it("returns 401 when unauthenticated", async () => {
+    const res = await request(buildApp(null)).get("/api/line-items/1");
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe("unauthorized");
+  });
+
   it("returns a single line item", async () => {
     mockDb.get.mockResolvedValue(makeLineItem());
     const res = await request(
@@ -326,9 +338,9 @@ describe("PUT /api/line-items/:id", () => {
         makeLineItem({ status: "pending", project_id: 1, budget_id: 1 }),
       )
       .mockResolvedValueOnce({ manager_id: 1 })
-      .mockResolvedValueOnce(makeLineItem({ status: "approved" }))
       .mockResolvedValueOnce({ id: 1, total_allocated_amount: 100000 })
-      .mockResolvedValueOnce({ expenses: 500, revenue: 0 });
+      .mockResolvedValueOnce({ expenses: 500, revenue: 0 })
+      .mockResolvedValueOnce(makeLineItem({ status: "approved" }));
     mockDb.run.mockResolvedValue({});
 
     const res = await request(

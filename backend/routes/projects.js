@@ -1,9 +1,9 @@
 const express = require("express");
 const router = express.Router();
-const { get, all, run } = require("../db");
-const { requireRole } = require("../middleware/auth");
+const { get, all, run, withTransaction } = require("../db");
+const { requireRole, requireUser } = require("../middleware/auth");
 
-router.get("/", async (req, res) => {
+router.get("/", requireUser, async (req, res) => {
   try {
     const { status } = req.query;
 
@@ -69,7 +69,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.get("/:id", async (req, res) => {
+router.get("/:id", requireUser, async (req, res) => {
   try {
     if (req.user?.role === "Lab Manager") {
       const ok = await get(
@@ -212,49 +212,49 @@ router.post(
 
       const project_code = `PRJ-${String(nextNum).padStart(3, "0")}`;
 
-      const result = await run(
-        `
-        INSERT INTO projects
-          (project_code, name, manager_id, start_date, end_date, budget, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        `,
-        [
-          project_code,
-          name,
-          manager_id,
-          start_date,
-          end_date,
-          budget,
-          status ?? "active",
-        ],
-      );
+      const project = await withTransaction(async (tx) => {
+        const result = await tx.run(
+          `
+          INSERT INTO projects
+            (project_code, name, manager_id, start_date, end_date, budget, status)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+          `,
+          [
+            project_code,
+            name,
+            manager_id,
+            start_date,
+            end_date,
+            budget,
+            status ?? "active",
+          ],
+        );
 
-      await run(
-        `
-        INSERT INTO budgets
-          (project_id, total_allocated_amount, remaining_balance)
-        VALUES (?, ?, ?)
-        `,
-        [result.lastInsertRowid, budget, budget],
-      );
+        await tx.run(
+          `
+          INSERT INTO budgets
+            (project_id, total_allocated_amount, remaining_balance)
+          VALUES (?, ?, ?)
+          `,
+          [result.lastInsertRowid, budget, budget],
+        );
 
-      const project = await get("SELECT * FROM projects WHERE id = ?", [
-        result.lastInsertRowid,
-      ]);
+        await tx.run(
+          "INSERT IGNORE INTO project_users (project_id, user_id) VALUES (?, ?)",
+          [result.lastInsertRowid, manager_id],
+        );
 
-      await run(
-        "INSERT IGNORE INTO project_users (project_id, user_id) VALUES (?, ?)",
-        [result.lastInsertRowid, manager_id],
-      );
-
-      if (Array.isArray(researcher_ids)) {
-        for (const researcherId of researcher_ids) {
-          await run(
-            "INSERT IGNORE INTO project_users (project_id, user_id) VALUES (?, ?)",
-            [result.lastInsertRowid, researcherId],
-          );
+        if (Array.isArray(researcher_ids)) {
+          for (const researcherId of researcher_ids) {
+            await tx.run(
+              "INSERT IGNORE INTO project_users (project_id, user_id) VALUES (?, ?)",
+              [result.lastInsertRowid, researcherId],
+            );
+          }
         }
-      }
+
+        return tx.get("SELECT * FROM projects WHERE id = ?", [result.lastInsertRowid]);
+      });
 
       res.status(201).json(project);
     } catch (err) {
@@ -305,64 +305,68 @@ router.put(
 
       const newBudget = budget ?? project.budget;
 
-      await run(
-        `
-        UPDATE projects
-        SET name = ?, manager_id = ?, start_date = ?, end_date = ?, budget = ?, status = ?
-        WHERE id = ?
-        `,
-        [
-          name ?? project.name,
-          manager_id ?? project.manager_id,
-          start_date ?? project.start_date,
-          end_date ?? project.end_date,
-          newBudget,
-          status ?? project.status,
-          req.params.id,
-        ],
-      );
-
-      if (budget !== undefined && Number(budget) !== Number(project.budget)) {
-        const diff = Number(budget) - Number(project.budget);
-
-        await run(
+      const updated = await withTransaction(async (tx) => {
+        await tx.run(
           `
-          UPDATE budgets
-          SET total_allocated_amount = ?, remaining_balance = remaining_balance + ?
-          WHERE project_id = ?
+          UPDATE projects
+          SET name = ?, manager_id = ?, start_date = ?, end_date = ?, budget = ?, status = ?
+          WHERE id = ?
           `,
-          [budget, diff, req.params.id],
-        );
-      }
-
-      const updated = await get("SELECT * FROM projects WHERE id = ?", [
-        req.params.id,
-      ]);
-
-      await run(
-        "INSERT IGNORE INTO project_users (project_id, user_id) VALUES (?, ?)",
-        [req.params.id, updated.manager_id],
-      );
-
-      if (Array.isArray(researcher_ids)) {
-        await run(
-          `
-          DELETE pu
-          FROM project_users pu
-          JOIN users u ON pu.user_id = u.id
-          WHERE pu.project_id = ?
-            AND u.role = 'Researcher'
-          `,
-          [req.params.id],
+          [
+            name ?? project.name,
+            manager_id ?? project.manager_id,
+            start_date ?? project.start_date,
+            end_date ?? project.end_date,
+            newBudget,
+            status ?? project.status,
+            req.params.id,
+          ],
         );
 
-        for (const researcherId of researcher_ids) {
-          await run(
-            "INSERT IGNORE INTO project_users (project_id, user_id) VALUES (?, ?)",
-            [req.params.id, researcherId],
+        if (budget !== undefined && Number(budget) !== Number(project.budget)) {
+          const diff = Number(budget) - Number(project.budget);
+
+          await tx.run(
+            `
+            UPDATE budgets
+            SET total_allocated_amount = ?, remaining_balance = remaining_balance + ?
+            WHERE project_id = ?
+            `,
+            [budget, diff, req.params.id],
           );
         }
-      }
+
+        const updatedProject = await tx.get("SELECT * FROM projects WHERE id = ?", [
+          req.params.id,
+        ]);
+
+        await tx.run(
+          "INSERT IGNORE INTO project_users (project_id, user_id) VALUES (?, ?)",
+          [req.params.id, updatedProject.manager_id],
+        );
+
+        if (Array.isArray(researcher_ids)) {
+          await tx.run(
+            `
+            DELETE pu
+            FROM project_users pu
+            JOIN users u ON pu.user_id = u.id
+            WHERE pu.project_id = ?
+              AND u.role = 'Researcher'
+            `,
+            [req.params.id],
+          );
+
+          for (const researcherId of researcher_ids) {
+            await tx.run(
+              "INSERT IGNORE INTO project_users (project_id, user_id) VALUES (?, ?)",
+              [req.params.id, researcherId],
+            );
+          }
+        }
+
+        return updatedProject;
+      });
 
       const researchers = await all(
         `
@@ -403,12 +407,12 @@ router.delete(
         return res.status(403).json({ error: "forbidden" });
       }
 
-      await run("DELETE FROM line_items WHERE project_id = ?", [req.params.id]);
-      await run("DELETE FROM budgets WHERE project_id = ?", [req.params.id]);
-      await run("DELETE FROM project_users WHERE project_id = ?", [
-        req.params.id,
-      ]);
-      await run("DELETE FROM projects WHERE id = ?", [req.params.id]);
+      await withTransaction(async (tx) => {
+        await tx.run("DELETE FROM line_items WHERE project_id = ?", [req.params.id]);
+        await tx.run("DELETE FROM budgets WHERE project_id = ?", [req.params.id]);
+        await tx.run("DELETE FROM project_users WHERE project_id = ?", [req.params.id]);
+        await tx.run("DELETE FROM projects WHERE id = ?", [req.params.id]);
+      });
 
       res.json({ message: "project deleted" });
     } catch (err) {
