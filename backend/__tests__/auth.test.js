@@ -1,3 +1,4 @@
+// SJSU CMPE 138 SPRING 2026 TEAM1
 const { mockDb, makeUser } = require("./helpers");
 
 const { attachUser, requireUser, requireRole } = require("../middleware/auth");

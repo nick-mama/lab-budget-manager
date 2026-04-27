@@ -1,3 +1,4 @@
+// SJSU CMPE 138 SPRING 2026 TEAM1
 const request = require("supertest");
 const express = require("express");
 const { mockDb, makeUser } = require("./helpers");

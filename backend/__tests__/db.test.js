@@ -1,3 +1,4 @@
+// SJSU CMPE 138 SPRING 2026 TEAM1
 jest.mock("mysql2/promise", () => ({
   createPool: jest.fn(),
 }));
