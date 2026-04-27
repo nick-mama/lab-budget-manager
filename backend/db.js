@@ -113,6 +113,14 @@ async function columnExists(tableName, columnName) {
   return Number(row?.count ?? 0) > 0;
 }
 
+async function dropColumnIfExists(tableName, columnName) {
+  if (await columnExists(tableName, columnName)) {
+    await getPool().execute(
+      `ALTER TABLE ${tableName} DROP COLUMN ${columnName}`
+    );
+  }
+}
+
 function makeUsername(name, email) {
   const baseFromName = String(name)
     .trim()
@@ -170,11 +178,21 @@ async function ensureSchema() {
       description TEXT NOT NULL,
       project_id INT NOT NULL,
       requestor_id INT NOT NULL,
+      approver_id INT NULL,
       type VARCHAR(50) NOT NULL,
       amount DECIMAL(15, 2) NOT NULL,
       request_date DATE NOT NULL,
+      decision_date DATE NULL,
+      payment_date DATE NULL,
+      rejection_reason TEXT NULL,
       status VARCHAR(50) NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT fk_line_items_project
+        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+      CONSTRAINT fk_line_items_requestor
+        FOREIGN KEY (requestor_id) REFERENCES users(id) ON DELETE RESTRICT,
+      CONSTRAINT fk_line_items_approver
+        FOREIGN KEY (approver_id) REFERENCES users(id) ON DELETE SET NULL
     )
   `);
 
@@ -253,11 +271,7 @@ async function ensureSchema() {
     );
   }
 
-  if (!(await columnExists("line_items", "budget_id"))) {
-    await getPool().execute(
-      "ALTER TABLE line_items ADD COLUMN budget_id INT NULL",
-    );
-  }
+  await dropColumnIfExists("line_items", "budget_id");
 
   const hasBudgets = await tableExists("budgets");
 
@@ -277,13 +291,6 @@ async function ensureSchema() {
       FROM projects p
       LEFT JOIN budgets b ON b.project_id = p.id
       WHERE b.project_id IS NULL
-    `);
-
-    await getPool().execute(`
-      UPDATE line_items li
-      JOIN budgets b ON b.project_id = li.project_id
-      SET li.budget_id = b.id
-      WHERE li.budget_id IS NULL
     `);
   }
 
