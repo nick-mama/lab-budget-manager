@@ -1,6 +1,7 @@
 const mysql = require("mysql2/promise");
 const path = require("path");
 const bcrypt = require("bcrypt");
+const logger = require("./logger");
 
 const SALT_ROUNDS = 12;
 const SAFE_SELECT_FIELDS = {
@@ -25,18 +26,45 @@ function getPool() {
 }
 
 async function get(sql, params = []) {
-  const [rows] = await getPool().execute(sql, params);
-  return rows[0] ?? null;
+  try {
+    const [rows] = await getPool().execute(sql, params);
+    return rows[0] ?? null;
+  } catch (err) {
+    logger.error("DB get failed", {
+      sql,
+      params,
+      error: err.message,
+    });
+    throw err;
+  }
 }
 
 async function all(sql, params = []) {
-  const [rows] = await getPool().execute(sql, params);
-  return rows;
+  try {
+    const [rows] = await getPool().execute(sql, params);
+    return rows;
+  } catch (err) {
+    logger.error("DB all failed", {
+      sql,
+      params,
+      error: err.message,
+    });
+    throw err;
+  }
 }
 
 async function run(sql, params = []) {
-  const [result] = await getPool().execute(sql, params);
-  return { lastInsertRowid: result.insertId };
+  try {
+    const [result] = await getPool().execute(sql, params);
+    return { lastInsertRowid: result.insertId };
+  } catch (err) {
+    logger.error("DB run failed", {
+      sql,
+      params,
+      error: err.message,
+    });
+    throw err;
+  }
 }
 
 async function withTransaction(work) {
@@ -46,16 +74,43 @@ async function withTransaction(work) {
 
     const tx = {
       async get(sql, params = []) {
-        const [rows] = await connection.execute(sql, params);
-        return rows[0] ?? null;
+        try {
+          const [rows] = await connection.execute(sql, params);
+          return rows[0] ?? null;
+        } catch (err) {
+          logger.error("DB tx get failed", {
+            sql,
+            params,
+            error: err.message,
+          });
+          throw err;
+        }
       },
       async all(sql, params = []) {
-        const [rows] = await connection.execute(sql, params);
-        return rows;
+        try {
+          const [rows] = await connection.execute(sql, params);
+          return rows;
+        } catch (err) {
+          logger.error("DB tx all failed", {
+            sql,
+            params,
+            error: err.message,
+          });
+          throw err;
+        }
       },
       async run(sql, params = []) {
-        const [result] = await connection.execute(sql, params);
-        return { lastInsertRowid: result.insertId };
+        try {
+          const [result] = await connection.execute(sql, params);
+          return { lastInsertRowid: result.insertId };
+        } catch (err) {
+          logger.error("DB tx run failed", {
+            sql,
+            params,
+            error: err.message,
+          });
+          throw err;
+        }
       },
     };
 
@@ -64,6 +119,9 @@ async function withTransaction(work) {
     return result;
   } catch (err) {
     await connection.rollback();
+    logger.error("DB transaction failed", {
+      error: err.message,
+    });
     throw err;
   } finally {
     connection.release();
@@ -563,13 +621,20 @@ async function initDb() {
     decimalNumbers: true,
   });
 
-  await ensureSchema();
+  try {
+    await ensureSchema();
 
-  const userCountRow = await get("SELECT COUNT(*) AS count FROM users");
-  const count = Number(userCountRow?.count ?? 0);
+    const userCountRow = await get("SELECT COUNT(*) AS count FROM users");
+    const count = Number(userCountRow?.count ?? 0);
 
-  if (count === 0) {
-    await seedData();
+    if (count === 0) {
+      await seedData();
+    }
+  } catch (err) {
+    logger.error("Database initialization failed", {
+      error: err.message,
+    });
+    throw err;
   }
 }
 
