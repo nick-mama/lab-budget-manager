@@ -24,18 +24,15 @@ app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 app.use(express.json());
 
-// request logging middleware
 app.use((req, res, next) => {
   const start = Date.now();
 
   res.on("finish", () => {
-    const durationMs = Date.now() - start;
-
     logger.info("HTTP request", {
       method: req.method,
       url: req.originalUrl,
       status: res.statusCode,
-      durationMs,
+      durationMs: Date.now() - start,
       ip: req.ip,
     });
   });
@@ -56,13 +53,11 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
-// error logging middleware
 app.use((err, req, res, next) => {
   logger.error("Unhandled server error", {
     method: req.method,
     url: req.originalUrl,
     error: err.message,
-    stack: err.stack,
   });
 
   res.status(500).json({ error: "Internal server error" });
@@ -77,7 +72,6 @@ initDb()
   .catch((err) => {
     logger.error("Failed to initialize database", {
       error: err.message,
-      stack: err.stack,
     });
     process.exit(1);
   });

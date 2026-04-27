@@ -126,3 +126,4 @@
 {"durationMs":1,"ip":"::ffff:127.0.0.1","level":"info","message":"HTTP request","method":"GET","status":200,"timestamp":"2026-04-27T06:30:12.347Z","url":"/api/line-items?"}
 {"durationMs":10,"ip":"::ffff:127.0.0.1","level":"info","message":"HTTP request","method":"PUT","status":200,"timestamp":"2026-04-27T06:30:21.331Z","url":"/api/line-items/11"}
 {"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"HTTP request","method":"GET","status":200,"timestamp":"2026-04-27T06:30:21.360Z","url":"/api/line-items?"}
+{"level":"info","message":"Server running on http://localhost:4000","timestamp":"2026-04-27T06:33:40.570Z"}
