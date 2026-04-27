@@ -141,6 +141,7 @@ router.post(
   async (req, res) => {
     try {
       const { description, project_id, type, amount, request_date } = req.body;
+
       if (
         !description ||
         !project_id ||
@@ -177,6 +178,7 @@ router.post(
       if (last) {
         nextNum = parseInt(String(last.item_code).replace("LI-", ""), 10) + 1;
       }
+
       const item_code = `LI-${String(nextNum).padStart(3, "0")}`;
 
       const budget = await get("SELECT id FROM budgets WHERE project_id = ?", [
@@ -188,12 +190,11 @@ router.post(
 
       const item = await withTransaction(async (tx) => {
         const result = await tx.run(
-          "INSERT INTO line_items (item_code, description, project_id, budget_id, requestor_id, type, amount, request_date, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          "INSERT INTO line_items (item_code, description, project_id, requestor_id, type, amount, request_date, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
           [
             item_code,
             description,
             pid,
-            budget.id,
             req.user.id,
             type,
             amount,
@@ -254,7 +255,6 @@ router.put("/:id", requireUser, async (req, res) => {
       }
     }
 
-    // Keep your existing status-transition rules
     if (nextStatus !== item.status) {
       const pid = Number(item.project_id);
 
@@ -301,7 +301,6 @@ router.put("/:id", requireUser, async (req, res) => {
     const oldPid = Number(item.project_id);
     const projectChanged = newPid !== oldPid;
 
-    let newBudgetId = item.budget_id;
     if (projectChanged) {
       const newBudget = await get(
         "SELECT id FROM budgets WHERE project_id = ?",
@@ -310,7 +309,6 @@ router.put("/:id", requireUser, async (req, res) => {
       if (!newBudget) {
         return res.status(400).json({ error: "target project has no budget" });
       }
-      newBudgetId = newBudget.id;
     }
 
     const updatedRow = await withTransaction(async (tx) => {
@@ -320,7 +318,6 @@ router.put("/:id", requireUser, async (req, res) => {
         SET
           description = ?,
           project_id = ?,
-          budget_id = ?,
           type = ?,
           amount = ?,
           request_date = ?,
@@ -346,7 +343,6 @@ router.put("/:id", requireUser, async (req, res) => {
         [
           description ?? item.description,
           newPid,
-          newBudgetId,
           type ?? item.type,
           amount ?? item.amount,
           request_date ?? item.request_date,

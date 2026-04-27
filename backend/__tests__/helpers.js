@@ -49,7 +49,6 @@ function makeLineItem(overrides = {}) {
     item_code: "LI-001",
     description: "Test Item",
     project_id: 1,
-    budget_id: 1,
     requestor_id: 2,
     type: "expense",
     amount: 500,

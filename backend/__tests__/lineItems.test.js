@@ -335,7 +335,7 @@ describe("PUT /api/line-items/:id", () => {
   it("Lab Manager can approve a pending item on their project", async () => {
     mockDb.get
       .mockResolvedValueOnce(
-        makeLineItem({ status: "pending", project_id: 1, budget_id: 1 }),
+        makeLineItem({ status: "pending", project_id: 1 }),
       )
       .mockResolvedValueOnce({ manager_id: 1 })
       .mockResolvedValueOnce({ id: 1, total_allocated_amount: 100000 })
@@ -348,6 +348,7 @@ describe("PUT /api/line-items/:id", () => {
     )
       .put("/api/line-items/1")
       .send({ status: "approved" });
+
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("approved");
   });

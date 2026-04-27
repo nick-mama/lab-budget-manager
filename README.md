@@ -127,7 +127,7 @@ The system is structured around the following primary tables:
     - `role_type`
 
 - **Budget**
-    - `budget_id`
+    - `project_id` (FK)
     - `total_allocated_amount`
     - `remaining_balance`
 
