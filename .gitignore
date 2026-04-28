@@ -15,6 +15,9 @@ next.user-config.*
 # Code coverage
 coverage/
 
+# Logs
+backend/logs/*
+
 # Legacy local SQLite file (backend now uses MySQL)
 backend/lab_budget.db
 
