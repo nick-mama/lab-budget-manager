@@ -171,11 +171,39 @@ async function columnExists(tableName, columnName) {
   return Number(row?.count ?? 0) > 0;
 }
 
+async function constraintExists(tableName, constraintName) {
+  const row = await get(
+    `
+    SELECT COUNT(*) AS count
+    FROM information_schema.table_constraints
+    WHERE table_schema = DATABASE()
+      AND table_name = ?
+      AND constraint_name = ?
+    `,
+    [tableName, constraintName],
+  );
+
+  return Number(row?.count ?? 0) > 0;
+}
+
+async function indexExists(tableName, indexName) {
+  const row = await get(
+    `
+    SELECT COUNT(*) AS count
+    FROM information_schema.statistics
+    WHERE table_schema = DATABASE()
+      AND table_name = ?
+      AND index_name = ?
+    `,
+    [tableName, indexName],
+  );
+
+  return Number(row?.count ?? 0) > 0;
+}
+
 async function dropColumnIfExists(tableName, columnName) {
   if (await columnExists(tableName, columnName)) {
-    await getPool().execute(
-      `ALTER TABLE ${tableName} DROP COLUMN ${columnName}`
-    );
+    await getPool().execute(`ALTER TABLE ${tableName} DROP COLUMN ${columnName}`);
   }
 }
 
@@ -189,6 +217,59 @@ function makeUsername(name, email) {
   if (cleanedName) return cleanedName;
 
   return String(email).split("@")[0].toLowerCase();
+}
+
+async function syncBudgetsFromProjects() {
+  await getPool().execute(`
+    INSERT INTO budgets (project_id, total_allocated_amount, remaining_balance)
+    SELECT
+      p.id,
+      COALESCE(p.budget, 0),
+      COALESCE(p.budget, 0) - COALESCE((
+        SELECT SUM(li.amount)
+        FROM line_items li
+        WHERE li.project_id = p.id
+          AND li.type = 'expense'
+          AND li.status != 'rejected'
+      ), 0)
+    FROM projects p
+    LEFT JOIN budgets b ON b.project_id = p.id
+    WHERE b.project_id IS NULL
+  `);
+
+  await getPool().execute(`
+    UPDATE budgets b
+    JOIN projects p ON p.id = b.project_id
+    LEFT JOIN (
+      SELECT
+        project_id,
+        COALESCE(SUM(amount), 0) AS total_expenses
+      FROM line_items
+      WHERE type = 'expense'
+        AND status != 'rejected'
+      GROUP BY project_id
+    ) li ON li.project_id = p.id
+    SET
+      b.total_allocated_amount = COALESCE(p.budget, 0),
+      b.remaining_balance = COALESCE(p.budget, 0) - COALESCE(li.total_expenses, 0)
+  `);
+}
+
+async function ensureBudgetForeignKey() {
+  if (!(await indexExists("budgets", "project_id"))) {
+    await getPool().execute(`
+      ALTER TABLE budgets
+      ADD UNIQUE KEY project_id (project_id)
+    `);
+  }
+
+  if (!(await constraintExists("budgets", "fk_budgets_project"))) {
+    await getPool().execute(`
+      ALTER TABLE budgets
+      ADD CONSTRAINT fk_budgets_project
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+    `);
+  }
 }
 
 async function ensureSchema() {
@@ -260,7 +341,9 @@ async function ensureSchema() {
       project_id INT NOT NULL UNIQUE,
       total_allocated_amount DECIMAL(15, 2) NOT NULL DEFAULT 0,
       remaining_balance DECIMAL(15, 2) NOT NULL DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT fk_budgets_project
+        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
     )
   `);
 
@@ -331,26 +414,8 @@ async function ensureSchema() {
 
   await dropColumnIfExists("line_items", "budget_id");
 
-  const hasBudgets = await tableExists("budgets");
-
-  if (hasBudgets) {
-    await getPool().execute(`
-      INSERT INTO budgets (project_id, total_allocated_amount, remaining_balance)
-      SELECT
-        p.id,
-        COALESCE(p.budget, 0),
-        COALESCE(p.budget, 0) - COALESCE((
-          SELECT SUM(li.amount)
-          FROM line_items li
-          WHERE li.project_id = p.id
-            AND li.type = 'expense'
-            AND li.status != 'rejected'
-        ), 0)
-      FROM projects p
-      LEFT JOIN budgets b ON b.project_id = p.id
-      WHERE b.project_id IS NULL
-    `);
-  }
+  await ensureBudgetForeignKey();
+  await syncBudgetsFromProjects();
 
   await getPool().execute(`
     INSERT IGNORE INTO project_users (project_id, user_id)
@@ -595,6 +660,20 @@ async function seedData() {
       li,
     );
   }
+
+  await syncBudgetsFromProjects();
+
+  await getPool().execute(`
+    INSERT IGNORE INTO project_users (project_id, user_id)
+    SELECT id, manager_id
+    FROM projects
+  `);
+
+  await getPool().execute(`
+    INSERT IGNORE INTO project_users (project_id, user_id)
+    SELECT DISTINCT project_id, requestor_id
+    FROM line_items
+  `);
 }
 
 async function initDb() {
@@ -629,6 +708,7 @@ async function initDb() {
 
     if (count === 0) {
       await seedData();
+      await syncBudgetsFromProjects();
     }
   } catch (err) {
     logger.error("Database initialization failed", {
